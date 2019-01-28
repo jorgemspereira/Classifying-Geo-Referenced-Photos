@@ -7,7 +7,7 @@ from keras import metrics
 from keras.applications.densenet import DenseNet121
 from keras.backend import set_session
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau
-from keras.layers import Dense, Dropout, GlobalMaxPooling2D
+from keras.layers import Dense, Dropout, GlobalMaxPooling2D, GlobalAveragePooling2D
 from keras.models import Model
 from keras.optimizers import Adam, SGD
 from keras_preprocessing.image import ImageDataGenerator
@@ -39,9 +39,10 @@ def create_model():
     optimizer = Adam(lr=1e-4, amsgrad=True)
 
     x = base_model.output
-    x = GlobalMaxPooling2D()(x)
-    x = Dropout(0.3)(x)
-    x = Dense(128, activation='relu')(x)
+    x = GlobalAveragePooling2D()(x)
+    # x = GlobalMaxPooling2D()(x)
+    # x = Dropout(0.3)(x)
+    # x = Dense(128, activation='relu')(x)
     predictions = Dense(1, activation='sigmoid')(x)
 
     model = Model(inputs=base_model.input, outputs=predictions)
@@ -50,28 +51,28 @@ def create_model():
     return model
 
 
-def freeze_first_layers(model):
-    for layer in model.layers[:-4]:
-        layer.trainable = False
+# def freeze_first_layers(model):
+#     for layer in model.layers[:-4]:
+#         layer.trainable = False
+#
+#     optimizer = Adam(lr=1e-3, amsgrad=True)
+#     model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=[metrics.binary_accuracy])
+#     return model
 
-    optimizer = Adam(lr=1e-3, amsgrad=True)
-    model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=[metrics.binary_accuracy])
-    return model
 
-
-def unfreeze_first_layers(model):
-    # for layer in model.layers[:137]:
-    #     layer.trainable = False
-    #
-    # for layer in model.layers[137:]:
-    #     layer.trainable = True
-
-    for layer in model.layers:
-        layer.trainable = True
-
-    optimizer = SGD(lr=1e-3, momentum=0.9)
-    model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=[metrics.binary_accuracy])
-    return model
+# def unfreeze_first_layers(model):
+#     # for layer in model.layers[:137]:
+#     #     layer.trainable = False
+#     #
+#     # for layer in model.layers[137:]:
+#     #     layer.trainable = True
+#
+#     for layer in model.layers:
+#         layer.trainable = True
+#
+#     optimizer = SGD(lr=1e-3, momentum=0.9)
+#     model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=[metrics.binary_accuracy])
+#     return model
 
 
 def get_callbacks():
@@ -117,10 +118,15 @@ def train_test_model(directory, info):
         trn_flow, val_flow = get_training_and_validation_flow(train_data_frame, directory)
         tst_flow = get_testing_flow(test_data_frame, directory)
 
-        model = freeze_first_layers(create_model())
-        model.fit_generator(generator=trn_flow, steps_per_epoch=(trn_flow.n // BATCH_SIZE), epochs=20)
+        # model = freeze_first_layers(create_model())
+        # model.fit_generator(generator=trn_flow, steps_per_epoch=(trn_flow.n // BATCH_SIZE), epochs=20)
+        #
+        # model = unfreeze_first_layers(model)
+        # model.fit_generator(generator=trn_flow, steps_per_epoch=(trn_flow.n // BATCH_SIZE),
+        #                     validation_data=val_flow, validation_steps=val_flow.n,
+        #                     callbacks=get_callbacks(), epochs=EPOCHS)
 
-        model = unfreeze_first_layers(model)
+        model = create_model()
         model.fit_generator(generator=trn_flow, steps_per_epoch=(trn_flow.n // BATCH_SIZE),
                             validation_data=val_flow, validation_steps=val_flow.n,
                             callbacks=get_callbacks(), epochs=EPOCHS)
