@@ -1,3 +1,4 @@
+import math
 import os
 
 import numpy as np
@@ -6,7 +7,7 @@ import tensorflow as tf
 from keras import metrics
 from keras.applications.densenet import DenseNet121
 from keras.backend import set_session
-from keras.callbacks import EarlyStopping, ReduceLROnPlateau
+from keras.callbacks import EarlyStopping, ReduceLROnPlateau, LearningRateScheduler
 from keras.layers import Dense, Dropout, GlobalMaxPooling2D, GlobalAveragePooling2D
 from keras.models import Model
 from keras.optimizers import Adam, SGD
@@ -20,7 +21,7 @@ RANDOM_SEED = 40
 
 BATCH_SIZE = 10
 N_FOLDS = 5
-EPOCHS = 50
+EPOCHS = 100
 
 
 def initial_configs():
@@ -76,10 +77,19 @@ def create_model():
 
 
 def get_callbacks():
-    early_stopping = EarlyStopping(monitor="val_loss", patience=10, verbose=1, mode='auto')
-    reduce_lr = ReduceLROnPlateau(monitor="val_loss", patience=5, factor=0.1, mode='auto', verbose=1)
 
-    return [early_stopping, reduce_lr]
+    def step_decay(epoch):
+        initial_lrate = 1e-4
+        drop = 0.5
+        epochs_drop = 2.0
+        lrate = initial_lrate * math.pow(drop, math.floor((1 + epoch) / epochs_drop))
+        return lrate
+
+    early_stopping = EarlyStopping(monitor="val_loss", patience=10, verbose=1, mode='auto')
+    # reduce_lr = ReduceLROnPlateau(monitor="val_loss", patience=5, factor=0.1, mode='auto', verbose=1)
+    scheduler_lr = LearningRateScheduler(schedule=step_decay, verbose=1)
+
+    return [early_stopping, scheduler_lr]
 
 
 def get_training_and_validation_flow(df, directory):
