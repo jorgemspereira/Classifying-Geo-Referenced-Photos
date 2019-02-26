@@ -1,5 +1,4 @@
 import argparse
-import math
 import os
 import random as rn
 import warnings
@@ -11,7 +10,7 @@ import tensorflow as tf
 from keras import metrics
 from keras.applications.densenet import DenseNet201
 from keras.backend import set_session
-from keras.callbacks import EarlyStopping, LearningRateScheduler
+from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.engine.saving import load_model
 from keras.layers import Dense, GlobalAveragePooling2D
 from keras.models import Model
@@ -20,6 +19,7 @@ from keras_preprocessing.image import ImageDataGenerator
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score, average_precision_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
+from callbacks.CyclicLR import CyclicLR
 from helpers.arguments import Mode, Dataset, Method
 from helpers.dataset import get_train_dataset_info, get_test_dataset_info
 
@@ -45,7 +45,7 @@ def initial_configs():
 
 def create_model():
     base_model = DenseNet201(include_top=False, weights='imagenet')
-    optimizer = Adam(lr=1e-4, amsgrad=True)
+    optimizer = Adam()
 
     x = base_model.output
     x = GlobalAveragePooling2D()(x)
@@ -58,19 +58,11 @@ def create_model():
 
 
 def get_callbacks(filepath):
-    # checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, mode='auto', save_best_only=True)
-    # cyclic_lr = CyclicLR(base_lr=1e-5, step_size=1500., max_lr=1e-4, mode='triangular2')
-
-    def step_decay(epoch):
-        initial_learning_rate, drop, epochs_drop = 1e-4, 0.5, 3.0
-        return initial_learning_rate * math.pow(drop, math.floor((1 + epoch) / epochs_drop))
-
+    checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, mode='auto', save_best_only=True)
     early_stopping = EarlyStopping(monitor='val_loss', patience=10, verbose=1, mode='auto', restore_best_weights=True)
-    scheduler_lr = LearningRateScheduler(schedule=step_decay, verbose=1)
+    cyclic_lr = CyclicLR(base_lr=1e-5, step_size=2000., max_lr=1e-4, mode='triangular2')
 
-    # return [early_stopping, checkpoint, cyclic_lr]
-
-    return [early_stopping, scheduler_lr]
+    return [early_stopping, checkpoint, cyclic_lr]
 
 
 def get_training_and_validation_flow(df, directory, split_size=0.10):
@@ -108,7 +100,7 @@ def get_testing_flow(df, directory):
 
 
 def train_test_model_split(train_directory, train_df, args):
-    filepath = "weights/{}_split_2/weights.hdf5".format(args['dataset'])
+    filepath = "weights/{}_split/weights.hdf5".format(args['dataset'])
     test_directory, test_df = get_test_dataset_info(args['dataset'])
 
     trn_flow, val_flow = get_training_and_validation_flow(train_df, train_directory, split_size=0.20)
