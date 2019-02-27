@@ -2,6 +2,7 @@ import argparse
 import os
 import random as rn
 import warnings
+from collections import defaultdict
 from operator import itemgetter
 
 import numpy as np
@@ -93,7 +94,6 @@ def get_testing_flow(df, directory):
     tst_flow = image_generator.flow_from_dataframe(dataframe=df, directory=directory, target_size=(224, 224),
                                                    class_mode="binary", shuffle=False, has_ext=False,
                                                    seed=RANDOM_SEED, batch_size=1)
-
     tst_flow.reset()
 
     return tst_flow
@@ -115,7 +115,9 @@ def train_test_model_split(train_directory, train_df, args):
         model = load_model(filepath)
 
     y_pred_prob = model.predict_generator(generator=tst_flow, verbose=1, steps=tst_flow.n)
-    y_pred = np.where(y_pred_prob > 0.5, 1, 0).flatten()
+    y_pred_prob = verify_probabilities(y_pred_prob, tst_flow)
+
+    y_pred = np.where(y_pred_prob > 0.5, 1, 0)
     y_test = tst_flow.classes
 
     precision, recall, f_score, _ = precision_recall_fscore_support(y_test, y_pred, average="binary")
@@ -128,18 +130,11 @@ def train_test_model_split(train_directory, train_df, args):
     print("Recall -------------> {}".format(recall))
     print("Accuracy -----------> {}".format(accuracy))
 
-    calculate_average_precision_ks(list(zip(y_pred_prob.flatten().tolist(), y_test)))
-
-
-def print_classifications(tst_flow, y_pred):
-    for idx, el in enumerate(y_pred):
-        green, red, end = '\033[92m', '\033[91m', '\033[0m'
-        color = green if tst_flow.classes[idx] == el else red
-        print(color + "{:<15} -> True: {} | Pred: {}".format(tst_flow.filenames[idx], tst_flow.classes[idx], el) + end)
+    calculate_average_precision_ks(list(zip(y_pred_prob.tolist(), y_test)))
 
 
 def train_test_model_cv(directory, info, args):
-    metrics_dict, y_pred_probs = {"precision": 0, "recall": 0, "f-score": 0, "accuracy": 0}, []
+    metrics_dict, y_pred_probs = defaultdict(int), []
     x, y, fold_nr = info.iloc[:, 0].values, info.iloc[:, 1].values, 1
     k_fold = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_SEED)
 
@@ -160,11 +155,12 @@ def train_test_model_cv(directory, info, args):
             model = load_model(filepath)
 
         y_pred_prob = model.predict_generator(generator=tst_flow, verbose=1, steps=tst_flow.n)
+        y_pred_prob = verify_probabilities(y_pred_prob, tst_flow)
+
+        y_pred = np.where(y_pred_prob > 0.5, 1, 0)
         y_test = tst_flow.classes
 
-        y_pred_probs.extend(list(zip(y_pred_prob.flatten().tolist(), y_test)))
-        y_pred = np.where(y_pred_prob > 0.5, 1, 0).flatten()
-
+        y_pred_probs += list(zip(y_pred_prob.tolist(), y_test))
         precision, recall, f_score, _ = precision_recall_fscore_support(y_test, y_pred, average="binary")
         accuracy = accuracy_score(y_test, y_pred)
 
@@ -183,6 +179,19 @@ def train_test_model_cv(directory, info, args):
     print("Mean Recall -------------> {}".format(metrics_dict["recall"] / N_FOLDS))
     print("Mean Accuracy -----------> {}".format(metrics_dict["accuracy"] / N_FOLDS))
     calculate_average_precision_ks(y_pred_probs)
+
+
+def verify_probabilities(y_probs, test_flow):
+    if test_flow.class_indices[0] != 0 and test_flow.class_indices[1] != 1:
+        return np.array([1 - el for el in y_probs.flatten()])
+    return y_probs.flatten()
+
+
+def print_classifications(tst_flow, y_pred):
+    for idx, el in enumerate(y_pred):
+        green, red, end = '\033[92m', '\033[91m', '\033[0m'
+        color = green if tst_flow.classes[idx] == el else red
+        print(color + "{:<15} -> True: {} | Pred: {}".format(tst_flow.filenames[idx], tst_flow.classes[idx], el) + end)
 
 
 def calculate_average_precision_ks(lst, ks=(50, 100, 250, 480)):
