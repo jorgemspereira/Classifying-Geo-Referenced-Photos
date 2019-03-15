@@ -19,6 +19,8 @@ class Mode(Enum):
 class Dataset(Enum):
     mediaeval2017 = 1
     european_floods = 2
+    both = 3
+    flood_severity = 4
 
     def __str__(self):
         return self.name
