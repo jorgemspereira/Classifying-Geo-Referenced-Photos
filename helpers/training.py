@@ -10,7 +10,7 @@ from sklearn.metrics import precision_recall_fscore_support, accuracy_score, con
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
 from helpers.arguments import Dataset
-from helpers.dataset import get_test_dataset_info
+from helpers.dataset import get_test_dataset_info, get_train_dataset_info
 from helpers.models import train_or_load_model
 
 
@@ -25,22 +25,26 @@ def check_path(filepath):
     return filepath
 
 
-def create_flow(df, is_binary, seed, batch_size, shuffle=True):
-    train_generator = ImageDataGenerator(rescale=1. / 255)
-    flow = train_generator.flow_from_dataframe(dataframe=df, directory=None, target_size=(224, 224), shuffle=shuffle,
-                                               class_mode=get_class_mode(is_binary), seed=seed, batch_size=batch_size)
+def create_flow(df, is_binary, seed, batch_size, shuffle=True, data_augmentation=False):
+    if data_augmentation:
+        generator = ImageDataGenerator(rescale=1. / 255, horizontal_flip=True, brightness_range=[0.9, 1.1])
+    else:
+        generator = ImageDataGenerator(rescale=1. / 255)
+
+    flow = generator.flow_from_dataframe(dataframe=df, directory=None, target_size=(224, 224), shuffle=shuffle,
+                                         class_mode=get_class_mode(is_binary), seed=seed, batch_size=batch_size)
     flow.reset()
     return flow
 
 
-def get_training_and_validation_flow(df, is_binary, random_seed, batch_size, split_size=0.10):
+def get_training_and_validation_flow(df, data_augmentation, is_binary, random_seed, batch_size, split_size=0.10):
     x, y = df.iloc[:, 0].values, df.iloc[:, 1].values
     x_train, x_val, y_train, y_val = train_test_split(x, y, test_size=split_size, stratify=y, random_state=random_seed)
 
     train_data_frame = pd.DataFrame(data={'filename': x_train, 'class': y_train})
     validation_data_frame = pd.DataFrame(data={'filename': x_val, 'class': y_val})
 
-    train_flow = create_flow(train_data_frame, is_binary, random_seed, batch_size)
+    train_flow = create_flow(train_data_frame, is_binary, random_seed, batch_size, data_augmentation=data_augmentation)
     validation_flow = create_flow(validation_data_frame, is_binary, random_seed, batch_size=1)
 
     return train_flow, validation_flow
@@ -113,12 +117,15 @@ def calculate_average_precision_ks(lst, is_binary, ks=(50, 100, 250, 480)):
         print("Average Precision @ {} -> {}".format(ks, score / len(ks)))
 
 
-def train_test_model_split(train_df, args, is_binary, seed, batch_size, epochs):
-    filepath = check_path("weights/{}_2_split/weights.hdf5".format(args['dataset']))
-    test_df = get_test_dataset_info(args['dataset'])
+def train_test_model_split(args, is_binary, seed, batch_size, epochs):
+    filepath = check_path("weights/{}_split/weights.hdf5".format(args['dataset']))
     split_size = 0.15 if args['dataset'] == Dataset.both else 0.20
 
-    trn_flow, val_flow = get_training_and_validation_flow(train_df, is_binary, seed, batch_size, split_size=split_size)
+    train_df = get_train_dataset_info(args['dataset'])
+    test_df = get_test_dataset_info(args['dataset'])
+
+    trn_flow, val_flow = get_training_and_validation_flow(train_df, args['data_augmentation'], is_binary,
+                                                          seed, batch_size, split_size=split_size)
     tst_flow = create_flow(test_df, is_binary, seed, batch_size=1, shuffle=False)
 
     model = train_or_load_model(args, trn_flow, val_flow, batch_size, filepath, epochs, is_binary)
@@ -134,9 +141,11 @@ def train_test_model_split(train_df, args, is_binary, seed, batch_size, epochs):
     calculate_accuracy_per_class(y_test, y_pred)
 
 
-def train_test_model_cv(info, args, is_binary, seed, batch_size, epochs, nr_folds):
-    metrics_dict, y_pred_prob_classes = defaultdict(int), []
-    x, y, fold_nr = info.iloc[:, 0].values, info.iloc[:, 1].values, 1
+def train_test_model_cv(args, is_binary, seed, batch_size, epochs, nr_folds):
+    info = get_train_dataset_info(args['dataset'])
+    x, y, = info.iloc[:, 0].values, info.iloc[:, 1].values
+
+    metrics_dict, y_pred_prob_classes, fold_nr = defaultdict(int), [], 1
     k_fold = StratifiedKFold(n_splits=nr_folds, shuffle=True, random_state=seed)
 
     for train, test in k_fold.split(x, y):
@@ -144,7 +153,8 @@ def train_test_model_cv(info, args, is_binary, seed, batch_size, epochs, nr_fold
         train_data_frame = pd.DataFrame(data={'filename': x[train], 'class': y[train]})
         test_data_frame = pd.DataFrame(data={'filename': x[test], 'class': y[test]})
 
-        trn_flow, val_flow = get_training_and_validation_flow(train_data_frame, is_binary, seed, batch_size)
+        trn_flow, val_flow = get_training_and_validation_flow(train_data_frame, args['data_augmentation'],
+                                                              is_binary, seed, batch_size)
         tst_flow = create_flow(test_data_frame, is_binary, seed, batch_size=1, shuffle=False)
 
         model = train_or_load_model(args, trn_flow, val_flow, batch_size, filepath, epochs, is_binary)

@@ -20,7 +20,8 @@ class Dataset(Enum):
     mediaeval2017 = 1
     european_floods = 2
     both = 3
-    flood_severity = 4
+    flood_severity_4_classes = 4
+    flood_severity_3_classes = 5
 
     def __str__(self):
         return self.name

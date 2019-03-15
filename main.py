@@ -1,14 +1,12 @@
 import argparse
 import os
 import random as rn
-import warnings
 
 import numpy as np
 import tensorflow as tf
 from keras.backend import set_session
 
 from helpers.arguments import Mode, Dataset, Method
-from helpers.dataset import get_train_dataset_info
 from helpers.training import train_test_model_cv, train_test_model_split
 
 RANDOM_SEED = 20
@@ -23,7 +21,6 @@ def initial_configs():
     rn.seed(RANDOM_SEED)
     np.set_printoptions(threshold=np.inf)
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-    # warnings.filterwarnings("ignore", category=UserWarning)
     config = tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=1)
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)
@@ -36,17 +33,17 @@ def parse_args():
     parser.add_argument("--mode", dest='mode', choices=list(Mode), type=Mode.from_string, required=True)
     parser.add_argument("--dataset", dest='dataset', choices=list(Dataset), type=Dataset.from_string, required=True)
     parser.add_argument("--method", dest='method', choices=list(Method), type=Method.from_string, required=True)
+    parser.add_argument('--data-augmentation', dest='data_augmentation', action='store_true')
     return vars(parser.parse_args())
 
 
 def train_test_model(args):
-    info = get_train_dataset_info(args['dataset'])
-    is_binary = args['dataset'] != Dataset.flood_severity
+    is_binary = args['dataset'] not in [Dataset.flood_severity_3_classes, Dataset.flood_severity_4_classes]
 
     if args['method'] == Method.cross_validation:
-        train_test_model_cv(info, args, is_binary, RANDOM_SEED, BATCH_SIZE, EPOCHS, N_FOLDS)
+        train_test_model_cv(args, is_binary, RANDOM_SEED, BATCH_SIZE, EPOCHS, N_FOLDS)
     if args['method'] == Method.train_test_split:
-        train_test_model_split(info, args, is_binary, RANDOM_SEED, BATCH_SIZE, EPOCHS)
+        train_test_model_split(args, is_binary, RANDOM_SEED, BATCH_SIZE, EPOCHS)
 
 
 def main():
