@@ -1,16 +1,13 @@
-import numpy as np
-
 from keras import activations, losses, metrics, Model
 from keras.applications import DenseNet201
-from keras.callbacks import ModelCheckpoint, EarlyStopping
+from keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
 from keras.engine.saving import load_model
 from keras.layers import GlobalAveragePooling2D, Dense
 from keras.optimizers import Adam
-from sklearn.utils import compute_class_weight
 
 from callbacks.CyclicLR import CyclicLR
 from helpers.arguments import Mode
-from helpers.focal_loss import categorical_focal_loss, categorical_class_balanced_focal_loss
+from helpers.focal_loss import categorical_focal_loss
 
 
 def create_model(number_classes):
@@ -39,8 +36,9 @@ def get_callbacks(filepath):
     checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, mode='auto', save_best_only=True)
     early_stopping = EarlyStopping(monitor='val_loss', patience=10, verbose=1, mode='auto', restore_best_weights=True)
     cyclic_lr = CyclicLR(base_lr=1e-5, step_size=2000., max_lr=1e-4, mode='triangular2')
+    terminate_nan = TerminateOnNaN()
 
-    return [early_stopping, checkpoint, cyclic_lr]
+    return [early_stopping, checkpoint, cyclic_lr, terminate_nan]
 
 
 def train_or_load_model(args, trn_flow, val_flow, batch_size, filepath, epochs, is_binary):
