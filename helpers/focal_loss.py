@@ -99,7 +99,7 @@ def categorical_class_balanced_focal_loss(n_instances_per_class, beta, gamma=2.)
       beta  -- parameter for the class balancing
 
     Default value:
-      alpha -- 0.25 as mentioned in the paper
+      gamma -- 2.0 as mentioned in the paper
 
     References:
         Official paper: https://arxiv.org/pdf/1901.05555.pdf
@@ -110,7 +110,6 @@ def categorical_class_balanced_focal_loss(n_instances_per_class, beta, gamma=2.)
                 metrics=["accuracy"],
                 optimizer=adam)
     """
-
     effective_num = 1.0 - np.power(beta, n_instances_per_class)
     weights = (1.0 - beta) / np.array(effective_num)
     weights = weights / np.sum(weights)

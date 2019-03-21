@@ -4,23 +4,31 @@ import cv2
 import keras.backend as K
 import numpy as np
 from keras.applications.densenet import preprocess_input
-from keras.engine.saving import load_model
 from keras.preprocessing import image
 from tqdm import tqdm
 
-from helpers.arguments import Method
-from helpers.dataset import get_test_images_directory
+
+def check_path(filepath):
+    if not os.path.isdir(filepath):
+        os.makedirs(filepath)
+    return filepath
 
 
-def visualize_class_activation_map(model, img_path, output_path):
+def visualize_class_activation_map(model, is_binary, img_path, output_path):
     img = image.load_img(img_path, target_size=(224, 224))
     x = image.img_to_array(img)
     x = np.expand_dims(x, axis=0)
     x = preprocess_input(x)
-    model.predict(x)
+
+    if is_binary:
+        output = model.output[:, 0]
+    else:
+        predictions = model.predict(x)
+        arg_max = np.argmax(predictions[0])
+        output = model.output[:, arg_max]
 
     last_conv_layer = model.get_layer("conv5_block32_2_conv")
-    grads = K.gradients(model.output[:, 0], last_conv_layer.output)[0]
+    grads = K.gradients(output, last_conv_layer.output)[0]
     pooled_grads = K.mean(grads, axis=(0, 1, 2))
     iterate = K.function([model.input], [pooled_grads, last_conv_layer.output[0]])
     pooled_grads_value, conv_layer_output_value = iterate([x])
@@ -40,17 +48,14 @@ def visualize_class_activation_map(model, img_path, output_path):
     cv2.imwrite(output_path, superimposed_img)
 
 
-def draw_class_activation_map(args):
-    if args['method'] != Method.train_test_split:
+def draw_class_activation_map(model, args, is_binary, test_data_frame):
+    if not args['class_activation_map']:
         return
 
-    output_directory = "./class_activation_maps/trained_by_{}".format(args["dataset"])
-    input_directory = get_test_images_directory()
+    output_directory = check_path("./class_activation_maps/trained_by_{}".format(args["dataset"]))
 
-    model_path = "./weights/{}_split/weights.hdf5".format(args["dataset"])
-    model = load_model(model_path)
-
-    for photo in tqdm(os.listdir(input_directory)):
-        input_path = "{}/{}".format(input_directory, photo)
+    print("Drawing class activation maps...")
+    for _, row in tqdm(test_data_frame.iterrows()):
+        input_path, photo = row[0], row[0].split("/")[-1]
         output_path = "{}/{}".format(output_directory, photo).replace(".jpg", ".bmp")
-        visualize_class_activation_map(model, input_path, output_path)
+        visualize_class_activation_map(model, is_binary, input_path, output_path)

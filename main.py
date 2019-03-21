@@ -33,7 +33,9 @@ def parse_args():
     parser.add_argument("--mode", dest='mode', choices=list(Mode), type=Mode.from_string, required=True)
     parser.add_argument("--dataset", dest='dataset', choices=list(Dataset), type=Dataset.from_string, required=True)
     parser.add_argument("--method", dest='method', choices=list(Method), type=Method.from_string, required=True)
-    parser.add_argument('--data-augmentation', dest='data_augmentation', action='store_true')
+    parser.add_argument("--data-augmentation", dest='data_augmentation', action='store_true')
+    parser.add_argument("--class-activation-map", dest='class_activation_map', action='store_true')
+    parser.add_argument("--print-classifications", dest='print_classifications', action='store_true')
     return vars(parser.parse_args())
 
 
@@ -50,8 +52,6 @@ def main():
     initial_configs()
     parsed_args = parse_args()
     train_test_model(parsed_args)
-
-    # draw_class_activation_map(parsed_args)
 
 
 if __name__ == "__main__":

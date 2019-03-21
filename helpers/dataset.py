@@ -60,7 +60,3 @@ def get_test_dataset_info(selected):
     if selected != Dataset.flood_severity_3_classes and selected != Dataset.flood_severity_4_classes:
         return join_full_path(MEDIA_EVAL_2017_TEST_DIRECTORY, MEDIA_EVAL_2017_TEST_LABELS)
     raise ValueError("There is not test split for flood severity dataset.")
-
-
-def get_test_images_directory():
-    return MEDIA_EVAL_2017_TEST_DIRECTORY

@@ -4,12 +4,13 @@ from operator import itemgetter
 
 import numpy as np
 import pandas as pd
-
+from keras import backend as K
 from keras_preprocessing.image import ImageDataGenerator
-from sklearn.metrics import precision_recall_fscore_support, accuracy_score, confusion_matrix, average_precision_score
+from sklearn.metrics import precision_recall_fscore_support, accuracy_score, confusion_matrix, \
+    average_precision_score, mean_absolute_error
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
-from helpers.arguments import Dataset
+from helpers.class_activation_map import draw_class_activation_map
 from helpers.dataset import get_test_dataset_info, get_train_dataset_info
 from helpers.models import train_or_load_model
 
@@ -27,7 +28,7 @@ def check_path(filepath):
 
 def create_flow(df, is_binary, seed, batch_size, shuffle=True, data_augmentation=False):
     if data_augmentation:
-        generator = ImageDataGenerator(rescale=1. / 255, horizontal_flip=True, brightness_range=[0.9, 1.1])
+        generator = ImageDataGenerator(rescale=1. / 255, horizontal_flip=True, brightness_range=[0.8, 1.2])
     else:
         generator = ImageDataGenerator(rescale=1. / 255)
 
@@ -84,10 +85,12 @@ def accuracy_precision_recall_fscore(y_test, y_pred, is_binary):
         precision, recall, f_score, _ = precision_recall_fscore_support(y_test, y_pred, average='binary')
         result.update({'precision': precision, 'recall': recall, 'f-score': f_score})
     else:
+        mean_absolute = mean_absolute_error(y_test, y_pred)
         precision_mi, recall_mi, f_score_mi, _ = precision_recall_fscore_support(y_test, y_pred, average='micro')
         precision_ma, recall_ma, f_score_ma, _ = precision_recall_fscore_support(y_test, y_pred, average='macro')
-        result.update({'precision_mi': precision_mi, 'precision_ma': precision_ma, 'recall_mi': recall_mi,
-                       'recall_ma': recall_ma, 'f-score_mi': f_score_mi, 'f-score_ma': f_score_ma})
+        result.update({'precision_mi': precision_mi, 'precision_ma': precision_ma,
+                       'recall_mi': recall_mi, 'recall_ma': recall_ma, 'f-score_mi': f_score_mi,
+                       'f-score_ma': f_score_ma, 'mean_absolute_error': mean_absolute})
     return result
 
 
@@ -98,6 +101,7 @@ def print_results(metrics, is_binary):
         print("Precision ---------------> {}".format(metrics['precision']))
         print("Recall ------------------> {}".format(metrics['recall']))
     else:
+        print("Mean Absolute Error -----> {}".format(metrics['mean_absolute_error']))
         print("F-Score (micro/macro) ---> {}/{}".format(metrics['f-score_mi'], metrics['f-score_ma']))
         print("Precision (micro/macro) -> {}/{}".format(metrics['precision_mi'], metrics['precision_ma']))
         print("Recall (micro/macro)  ---> {}/{}".format(metrics['recall_mi'], metrics['recall_ma']))
@@ -119,26 +123,28 @@ def calculate_average_precision_ks(lst, is_binary, ks=(50, 100, 250, 480)):
 
 def train_test_model_split(args, is_binary, seed, batch_size, epochs):
     filepath = check_path("weights/{}_split/weights.hdf5".format(args['dataset']))
-    split_size = 0.15 if args['dataset'] == Dataset.both else 0.20
 
     train_df = get_train_dataset_info(args['dataset'])
     test_df = get_test_dataset_info(args['dataset'])
 
     trn_flow, val_flow = get_training_and_validation_flow(train_df, args['data_augmentation'], is_binary,
-                                                          seed, batch_size, split_size=split_size)
+                                                          seed, batch_size, split_size=0.20)
     tst_flow = create_flow(test_df, is_binary, seed, batch_size=1, shuffle=False)
 
-    model = train_or_load_model(args, trn_flow, val_flow, batch_size, filepath, epochs, is_binary)
+    model = train_or_load_model(args, trn_flow, val_flow, batch_size, filepath, epochs)
     y_pred_prob = model.predict_generator(generator=tst_flow, verbose=1, steps=tst_flow.n)
 
     y_pred_prob, y_pred, y_test = calculate_prediction(y_pred_prob, trn_flow, tst_flow, is_binary)
     metrics_dict = accuracy_precision_recall_fscore(y_test, y_pred, is_binary)
-
     y_pred_prob_classes = list(zip(y_pred_prob.tolist(), y_test))
+
+    print_classifications(args, tst_flow, y_pred)
     print_results(metrics_dict, is_binary)
 
     calculate_average_precision_ks(y_pred_prob_classes, is_binary)
     calculate_accuracy_per_class(y_test, y_pred)
+
+    draw_class_activation_map(model, args, is_binary, test_df)
 
 
 def train_test_model_cv(args, is_binary, seed, batch_size, epochs, nr_folds):
@@ -157,7 +163,7 @@ def train_test_model_cv(args, is_binary, seed, batch_size, epochs, nr_folds):
                                                               is_binary, seed, batch_size)
         tst_flow = create_flow(test_data_frame, is_binary, seed, batch_size=1, shuffle=False)
 
-        model = train_or_load_model(args, trn_flow, val_flow, batch_size, filepath, epochs, is_binary)
+        model = train_or_load_model(args, trn_flow, val_flow, batch_size, filepath, epochs)
         y_pred_prob = model.predict_generator(generator=tst_flow, verbose=1, steps=tst_flow.n)
 
         y_pred_prob, y_pred, y_test = calculate_prediction(y_pred_prob, trn_flow, tst_flow, is_binary)
@@ -172,8 +178,12 @@ def train_test_model_cv(args, is_binary, seed, batch_size, epochs, nr_folds):
             print("Accuracy ----------------> {}".format(metrics_it['accuracy']))
             print("F-Score (micro/macro) ---> {}/{}".format(metrics_it['f-score_mi'], metrics_it['f-score_ma']))
 
+        print_classifications(args, tst_flow, y_pred)
         calculate_accuracy_per_class(y_test, y_pred)
+        draw_class_activation_map(model, args, is_binary, test_data_frame)
+
         metrics_dict = dict((k, metrics_dict[k] + v) for k, v in metrics_it.items())
+        K.clear_session()
         fold_nr += 1
 
     metrics_dict = dict((k, v / nr_folds) for k, v in metrics_dict.items())
@@ -181,8 +191,11 @@ def train_test_model_cv(args, is_binary, seed, batch_size, epochs, nr_folds):
     calculate_average_precision_ks(y_pred_prob_classes, is_binary)
 
 
-# def print_classifications(tst_flow, y_pred):
-#     for idx, el in enumerate(y_pred):
-#        green, red, end = '\033[92m', '\033[91m', '\033[0m'
-#        color = green if tst_flow.classes[idx] == el else red
-#        print(color + "{:<15} -> True: {} | Pred: {}".format(tst_flow.filenames[idx], tst_flow.classes[idx], el) + end)
+def print_classifications(args, tst_flow, y_pred):
+    if not args['print_classifications']:
+        return
+
+    for idx, el in enumerate(y_pred):
+        green, red, end = '\033[92m', '\033[91m', '\033[0m'
+        color = green if tst_flow.classes[idx] == el else red
+        print(color + "{:<15} -> True: {} | Pred: {}".format(tst_flow.filenames[idx], tst_flow.classes[idx], el) + end)
