@@ -128,7 +128,7 @@ def train_test_model_split(args, is_binary, seed, batch_size, epochs):
     test_df = get_test_dataset_info(args['dataset'])
 
     trn_flow, val_flow = get_training_and_validation_flow(train_df, args['data_augmentation'], is_binary,
-                                                          seed, batch_size, split_size=0.20)
+                                                          seed, batch_size, split_size=0.10)
     tst_flow = create_flow(test_df, is_binary, seed, batch_size=1, shuffle=False)
 
     model = train_or_load_model(args, trn_flow, val_flow, batch_size, filepath, epochs)
@@ -195,7 +195,13 @@ def print_classifications(args, tst_flow, y_pred):
     if not args['print_classifications']:
         return
 
-    for idx, el in enumerate(y_pred):
-        green, red, end = '\033[92m', '\033[91m', '\033[0m'
-        color = green if tst_flow.classes[idx] == el else red
-        print(color + "{:<15} -> True: {} | Pred: {}".format(tst_flow.filenames[idx], tst_flow.classes[idx], el) + end)
+    with open("info.txt", "a+") as f:
+        for idx, el in enumerate(y_pred):
+            green, red, end = '\033[92m', '\033[91m', '\033[0m'
+            color = green if tst_flow.classes[idx] == el else red
+            print(color + "{:<105} -> True: {} | Pred: {}"
+                  .format(tst_flow.filenames[idx], tst_flow.classes[idx], el) + end)
+            tick = "Correct" if tst_flow.classes[idx] == el else "Incorrect"
+            f.write("{:<105} -> True: {} | Pred: {} -> {}\n"
+                    .format(tst_flow.filenames[idx], tst_flow.classes[idx], el, tick))
+        f.write("------------------------------------------------\n")

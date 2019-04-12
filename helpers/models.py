@@ -1,5 +1,5 @@
 from keras import activations, losses, metrics, Model
-from keras.applications import DenseNet201
+from keras.applications import DenseNet201, NASNetLarge
 from keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
 from keras.engine.saving import load_model
 from keras.layers import GlobalAveragePooling2D, Dense
@@ -19,7 +19,8 @@ def count(lst):
 
 def create_model(trn_flow, number_classes):
     base_model = DenseNet201(include_top=False, weights='imagenet')
-    optimizer = Adam()
+    # base_model = NASNetLarge(include_top=False, weights='imagenet')
+    optimizer = Adam(lr=1e-4)
 
     x = base_model.output
     x = GlobalAveragePooling2D()(x)
@@ -44,7 +45,7 @@ def get_callbacks(filepath):
     cyclic_lr = CyclicLR(base_lr=1e-5, step_size=2000., max_lr=1e-4, mode='triangular2')
     terminate_nan = TerminateOnNaN()
 
-    return [early_stopping, checkpoint, cyclic_lr, terminate_nan]
+    return [early_stopping, checkpoint, terminate_nan, cyclic_lr]
 
 
 def train_or_load_model(args, trn_flow, val_flow, batch_size, filepath, epochs):

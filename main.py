@@ -40,7 +40,9 @@ def parse_args():
 
 
 def train_test_model(args):
-    is_binary = args['dataset'] not in [Dataset.flood_severity_3_classes, Dataset.flood_severity_4_classes]
+    is_binary = args['dataset'] not in [Dataset.flood_severity_3_classes,
+                                        Dataset.flood_severity_4_classes,
+                                        Dataset.flood_severity_european_floods]
 
     if args['method'] == Method.cross_validation:
         train_test_model_cv(args, is_binary, RANDOM_SEED, BATCH_SIZE, EPOCHS, N_FOLDS)
@@ -52,6 +54,17 @@ def main():
     initial_configs()
     parsed_args = parse_args()
     train_test_model(parsed_args)
+
+    # custom_object = {'categorical_class_balanced_focal_loss_fixed': lambda y_true, y_pred: y_pred,
+    #                  'categorical_class_balanced_focal_loss': lambda y_true, y_pred: y_pred}
+
+    # filepath = "weights/flood_severity_3_classes_cv/weights_fold_{}_from_{}.hdf5".format(2, 10)
+    # model = load_model(filepath, custom_objects=custom_object)
+
+    # input_path = "/home/jpereira/Tests/datasets/MediaEval2017/" \
+    #              "Classification/development_set/devset_images/132772686.jpg"
+    # output_path = "./132772686.bmp"
+    # visualize_class_activation_map(model, False, input_path, output_path)
 
 
 if __name__ == "__main__":

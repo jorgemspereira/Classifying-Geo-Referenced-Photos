@@ -12,9 +12,17 @@ MEDIA_EVAL_2017_TEST_SEVERITY_LABELS = "./datasets/FloodSeverity/dataset_test_me
 MEDIA_EVAL_2017_TEST_DIRECTORY = "./datasets/MediaEval2017/Classification/test_set/testset_images"
 MEDIA_EVAL_2017_TEST_LABELS = "./datasets/MediaEval2017/Classification/test_set/testset_images_gt.csv"
 
+MEDIA_EVAL_2018_TRAIN_SEVERITY_LABELS = "./datasets/FloodSeverity/dataset_train_mediaeval_2018.csv"
+MEDIA_EVAL_2018_TRAIN_DIRECTORY = "./datasets/MediaEval2018/Classification/development_set/devset_images"
+MEDIA_EVAL_2018_TRAIN_LABELS = "./datasets/MediaEval2018/Classification/development_set/devset_images_gt.csv"
+
+MEDIA_EVAL_2018_TEST_SEVERITY_LABELS = "./datasets/FloodSeverity/dataset_test_mediaeval_2018.csv"
+MEDIA_EVAL_2018_TEST_DIRECTORY = "./datasets/MediaEval2018/Classification/test_set/testset_images"
+MEDIA_EVAL_2018_TEST_LABELS = "./datasets/MediaEval2018/Classification/test_set/testset_images_gt.csv"
+
 EUROPEAN_FLOOD_2013_SEVERITY_LABELS = "./datasets/FloodSeverity/dataset_european_flood_2013.csv"
 EUROPEAN_FLOOD_2013_DIRECTORY = "./datasets/EuropeanFlood2013/imgs_small"
-EUROPEAN_FLOOD_2013_LABELS = "./datasets/EuropeanFlood2013/classification_2.csv"
+EUROPEAN_FLOOD_2013_LABELS = "./datasets/EuropeanFlood2013/classification.csv"
 
 
 def join_full_path(folder, labels):
@@ -40,8 +48,12 @@ def get_train_dataset_info(selected):
 
     if selected == Dataset.both:
         european_floods = join_full_path(EUROPEAN_FLOOD_2013_DIRECTORY, EUROPEAN_FLOOD_2013_LABELS)
-        media_eval = join_full_path(MEDIA_EVAL_2017_TRAIN_DIRECTORY, MEDIA_EVAL_2017_TRAIN_LABELS)
-        return european_floods.append(media_eval, ignore_index=True)
+        media_eval_2017 = join_full_path(MEDIA_EVAL_2017_TRAIN_DIRECTORY, MEDIA_EVAL_2017_TRAIN_LABELS)
+        media_eval_2018_train = join_full_path(MEDIA_EVAL_2018_TRAIN_DIRECTORY, MEDIA_EVAL_2018_TRAIN_LABELS)
+        media_eval_2018_test = join_full_path(MEDIA_EVAL_2018_TEST_DIRECTORY, MEDIA_EVAL_2018_TEST_LABELS)
+        result = european_floods.append(media_eval_2017, ignore_index=True)
+        result = result.append(media_eval_2018_train, ignore_index=True).append(media_eval_2018_test, ignore_index=True)
+        return result.drop(result[result['class'] == str(4)].index).reset_index(drop=True)
 
     if selected == Dataset.flood_severity_4_classes or selected == Dataset.flood_severity_3_classes:
         media_eval_test = join_full_path(MEDIA_EVAL_2017_TEST_DIRECTORY, MEDIA_EVAL_2017_TEST_SEVERITY_LABELS)
@@ -55,8 +67,14 @@ def get_train_dataset_info(selected):
 
         return result
 
+    if selected == Dataset.flood_severity_european_floods:
+        result = join_full_path(EUROPEAN_FLOOD_2013_DIRECTORY, EUROPEAN_FLOOD_2013_SEVERITY_LABELS)
+        result = result.drop(result[result['class'] == str(4)].index).reset_index(drop=True)
+        return result.replace({'class': {'3': '2'}})
+
 
 def get_test_dataset_info(selected):
-    if selected != Dataset.flood_severity_3_classes and selected != Dataset.flood_severity_4_classes:
+    if selected not in [Dataset.flood_severity_3_classes, Dataset.flood_severity_4_classes,
+                        Dataset.flood_severity_european_floods]:
         return join_full_path(MEDIA_EVAL_2017_TEST_DIRECTORY, MEDIA_EVAL_2017_TEST_LABELS)
     raise ValueError("There is not test split for flood severity dataset.")

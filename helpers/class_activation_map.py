@@ -44,7 +44,7 @@ def visualize_class_activation_map(model, is_binary, img_path, output_path):
     heat_map = cv2.resize(heat_map, (img.shape[1], img.shape[0]))
     heat_map = np.uint8(255 * heat_map)
     heat_map = cv2.applyColorMap(heat_map, cv2.COLORMAP_JET)
-    superimposed_img = heat_map * .8 + img
+    superimposed_img = heat_map * .3 + img
     cv2.imwrite(output_path, superimposed_img)
 
 
