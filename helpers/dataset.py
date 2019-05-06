@@ -36,7 +36,7 @@ def join_full_path(folder, labels):
                 labels.iloc[index] = row
                 break
 
-    return labels
+    return labels[~labels.filename.str.endswith(".gif")]
 
 
 def get_train_dataset_info(selected):

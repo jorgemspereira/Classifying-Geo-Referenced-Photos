@@ -7,7 +7,7 @@ import tensorflow as tf
 from keras.backend import set_session
 
 from helpers.arguments import Mode, Dataset, Method
-from helpers.training import train_test_model_cv, train_test_model_split
+from helpers.training import train_test_model_split, train_test_attention_guided_cnn
 
 RANDOM_SEED = 20
 BATCH_SIZE = 8
@@ -45,7 +45,7 @@ def train_test_model(args):
                                         Dataset.flood_severity_european_floods]
 
     if args['method'] == Method.cross_validation:
-        train_test_model_cv(args, is_binary, RANDOM_SEED, BATCH_SIZE, EPOCHS, N_FOLDS)
+        train_test_attention_guided_cnn(args, is_binary, RANDOM_SEED, BATCH_SIZE, EPOCHS, N_FOLDS)
     if args['method'] == Method.train_test_split:
         train_test_model_split(args, is_binary, RANDOM_SEED, BATCH_SIZE, EPOCHS)
 
@@ -56,15 +56,15 @@ def main():
     train_test_model(parsed_args)
 
     # custom_object = {'categorical_class_balanced_focal_loss_fixed': lambda y_true, y_pred: y_pred,
-    #                  'categorical_class_balanced_focal_loss': lambda y_true, y_pred: y_pred}
+    #                 'categorical_class_balanced_focal_loss': lambda y_true, y_pred: y_pred}
 
-    # filepath = "weights/flood_severity_3_classes_cv/weights_fold_{}_from_{}.hdf5".format(2, 10)
-    # model = load_model(filepath, custom_objects=custom_object)
+    # model = load_model("weights/flood_severity_3_classes_attention_guided_global_branch_cv/weights_fold_1_from_10.hdf5",
+    #                   custom_objects=custom_object)
 
-    # input_path = "/home/jpereira/Tests/datasets/MediaEval2017/" \
-    #              "Classification/development_set/devset_images/132772686.jpg"
-    # output_path = "./132772686.bmp"
-    # visualize_class_activation_map(model, False, input_path, output_path)
+    # input_path = "/home/jpereira/Tests/datasets/EuropeanFlood2013/imgs_small/26458059.jpg"
+    # output_path = "./26458059.bmp"
+
+    # visualize_class_activation_map(model, False, input_path, output_path, crop=False)
 
 
 if __name__ == "__main__":

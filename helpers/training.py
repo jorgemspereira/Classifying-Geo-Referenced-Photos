@@ -10,7 +10,7 @@ from sklearn.metrics import precision_recall_fscore_support, accuracy_score, con
     average_precision_score, mean_absolute_error
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
-from helpers.class_activation_map import draw_class_activation_map
+from helpers.class_activation_map import draw_class_activation_map, crop_and_draw_class_activation_map
 from helpers.dataset import get_test_dataset_info, get_train_dataset_info
 from helpers.models import train_or_load_model
 
@@ -51,6 +51,16 @@ def get_training_and_validation_flow(df, data_augmentation, is_binary, random_se
     return train_flow, validation_flow
 
 
+def merge_generators(x1, x2):
+    x1.reset()
+    x2.reset()
+
+    while True:
+        x1i = x1.next()
+        x2i = x2.next()
+        yield [x1i[0], x2i[0]], x1i[1]
+
+
 def verify_probabilities(y_probs, train_flow):
     train_indices = train_flow.class_indices
     if train_indices['0'] != 0 and train_flow['1'] != 1:
@@ -86,10 +96,8 @@ def accuracy_precision_recall_fscore(y_test, y_pred, is_binary):
         result.update({'precision': precision, 'recall': recall, 'f-score': f_score})
     else:
         mean_absolute = mean_absolute_error(y_test, y_pred)
-        precision_mi, recall_mi, f_score_mi, _ = precision_recall_fscore_support(y_test, y_pred, average='micro')
         precision_ma, recall_ma, f_score_ma, _ = precision_recall_fscore_support(y_test, y_pred, average='macro')
-        result.update({'precision_mi': precision_mi, 'precision_ma': precision_ma,
-                       'recall_mi': recall_mi, 'recall_ma': recall_ma, 'f-score_mi': f_score_mi,
+        result.update({'precision_ma': precision_ma, 'recall_ma': recall_ma,
                        'f-score_ma': f_score_ma, 'mean_absolute_error': mean_absolute})
     return result
 
@@ -102,9 +110,18 @@ def print_results(metrics, is_binary):
         print("Recall ------------------> {}".format(metrics['recall']))
     else:
         print("Mean Absolute Error -----> {}".format(metrics['mean_absolute_error']))
-        print("F-Score (micro/macro) ---> {}/{}".format(metrics['f-score_mi'], metrics['f-score_ma']))
-        print("Precision (micro/macro) -> {}/{}".format(metrics['precision_mi'], metrics['precision_ma']))
-        print("Recall (micro/macro)  ---> {}/{}".format(metrics['recall_mi'], metrics['recall_ma']))
+        print("F-Score (macro) ---------> {}".format(metrics['f-score_ma']))
+        print("Precision (macro) -------> {}".format(metrics['precision_ma']))
+        print("Recall (macro) ----------> {}".format(metrics['recall_ma']))
+
+
+def print_fold_results(metrics, is_binary):
+    if is_binary:
+        print("Accuracy ----------------> {}".format(metrics['accuracy']))
+        print("F-Score -----------------> {}".format(metrics['f-score']))
+    else:
+        print("Accuracy ----------------> {}".format(metrics['accuracy']))
+        print("F-Score (macro) ---------> {}".format(metrics['f-score_ma']))
 
 
 def calculate_average_precision_ks(lst, is_binary, ks=(50, 100, 250, 480)):
@@ -131,7 +148,8 @@ def train_test_model_split(args, is_binary, seed, batch_size, epochs):
                                                           seed, batch_size, split_size=0.10)
     tst_flow = create_flow(test_df, is_binary, seed, batch_size=1, shuffle=False)
 
-    model = train_or_load_model(args, trn_flow, val_flow, batch_size, filepath, epochs)
+    model = train_or_load_model(args, trn_flow, val_flow, batch_size, filepath, epochs,
+                                trn_flow.classes, trn_flow.n, val_flow.n)
     y_pred_prob = model.predict_generator(generator=tst_flow, verbose=1, steps=tst_flow.n)
 
     y_pred_prob, y_pred, y_test = calculate_prediction(y_pred_prob, trn_flow, tst_flow, is_binary)
@@ -144,7 +162,94 @@ def train_test_model_split(args, is_binary, seed, batch_size, epochs):
     calculate_average_precision_ks(y_pred_prob_classes, is_binary)
     calculate_accuracy_per_class(y_test, y_pred)
 
-    draw_class_activation_map(model, args, is_binary, test_df)
+    draw_class_activation_map(model, args, is_binary, test_df, trn_flow)
+
+
+def train_test_attention_guided_cnn(args, is_binary, seed, batch_size, epochs, nr_folds):
+    info = get_train_dataset_info(args['dataset'])
+    x, y, = info.iloc[:, 0].values, info.iloc[:, 1].values
+
+    metrics_dict, y_pred_prob_classes, fold_nr = defaultdict(int), [], 1
+    k_fold = StratifiedKFold(n_splits=nr_folds, shuffle=True, random_state=seed)
+
+    for train, test in k_fold.split(x, y):
+        train_data_frame = pd.DataFrame(data={'filename': x[train], 'class': y[train]})
+        test_data_frame = pd.DataFrame(data={'filename': x[test], 'class': y[test]})
+
+        first_branch_path = "weights/{}_attention_guided_global_branch_cv/weights_fold_{}_from_{}.hdf5"
+        first_branch_path = check_path(first_branch_path.format(args['dataset'], fold_nr, nr_folds))
+
+        second_branch_path = "weights/{}_attention_guided_local_branch_cv/weights_fold_{}_from_{}.hdf5"
+        second_branch_path = check_path(second_branch_path.format(args['dataset'], fold_nr, nr_folds))
+
+        all_network_path = "weights/{}_attention_guided_all_cv/weights_fold_{}_from_{}.hdf5"
+        all_network_path = check_path(all_network_path.format(args['dataset'], fold_nr, nr_folds))
+
+        trn_flow_1, val_flow_1 = get_training_and_validation_flow(train_data_frame, args['data_augmentation'],
+                                                                  is_binary, seed, batch_size)
+
+        model_global = train_or_load_model(args, trn_flow_1, val_flow_1, batch_size, first_branch_path, epochs,
+                                           trn_flow_1.classes, trn_flow_1.n, val_flow_1.n)
+
+        tst_flow_1 = create_flow(test_data_frame, is_binary, seed, batch_size=1, shuffle=False)
+        y_pred_prob = model_global.predict_generator(generator=tst_flow_1, verbose=1, steps=tst_flow_1.n)
+        y_pred_prob, y_pred, y_test = calculate_prediction(y_pred_prob, trn_flow_1, tst_flow_1, is_binary)
+        metrics_it = accuracy_precision_recall_fscore(y_test, y_pred, is_binary)
+
+        print("Global branch results.")
+        print_fold_results(metrics_it, is_binary)
+        calculate_accuracy_per_class(y_test, y_pred)
+
+        test_data_frame_2 = crop_and_draw_class_activation_map(model_global, args, is_binary,
+                                                               test_data_frame, trn_flow_1, fold_nr)
+
+        train_data_frame_2 = crop_and_draw_class_activation_map(model_global, args, is_binary,
+                                                                train_data_frame, trn_flow_1, fold_nr)
+
+        trn_flow_2, val_flow_2 = get_training_and_validation_flow(train_data_frame_2, args['data_augmentation'],
+                                                                  is_binary, seed, batch_size)
+        model_local = train_or_load_model(args, trn_flow_2, val_flow_2, batch_size, second_branch_path, epochs,
+                                          trn_flow_2.classes, trn_flow_2.n, val_flow_2.n)
+
+        tst_flow_2 = create_flow(test_data_frame_2, is_binary, seed, batch_size=1, shuffle=False)
+        y_pred_prob = model_local.predict_generator(generator=tst_flow_2, verbose=1, steps=tst_flow_2.n)
+        y_pred_prob, y_pred, y_test = calculate_prediction(y_pred_prob, trn_flow_2, tst_flow_2, is_binary)
+        metrics_it = accuracy_precision_recall_fscore(y_test, y_pred, is_binary)
+
+        print("Local branch results.")
+        print_fold_results(metrics_it, is_binary)
+        calculate_accuracy_per_class(y_test, y_pred)
+
+        trn_flow_merged = merge_generators(trn_flow_1, trn_flow_2)
+        val_flow_merged = merge_generators(val_flow_1, val_flow_2)
+
+        models = {"model_global": model_global, "model_local": model_local}
+        model = train_or_load_model(args, trn_flow_merged, val_flow_merged, batch_size, all_network_path,
+                                    epochs, trn_flow_1.classes, trn_flow_1.n, val_flow_1.n,
+                                    branch="fused", branches_models=models)
+
+        tst_flow_2 = create_flow(test_data_frame_2, is_binary, seed, batch_size=1, shuffle=False)
+        tst_flow_merged = merge_generators(tst_flow_1, tst_flow_2)
+
+        y_pred_prob = model.predict_generator(generator=tst_flow_merged, verbose=1, steps=tst_flow_1.n)
+        y_pred_prob, y_pred, y_test = calculate_prediction(y_pred_prob, trn_flow_1, tst_flow_1, is_binary)
+        metrics_it = accuracy_precision_recall_fscore(y_test, y_pred, is_binary)
+        y_pred_prob_classes += list(zip(y_pred_prob.tolist(), y_test))
+
+        print("Fused model results.")
+        print_fold_results(metrics_it, is_binary)
+        print_classifications(args, tst_flow_1, y_pred)
+        calculate_accuracy_per_class(y_test, y_pred)
+
+        draw_class_activation_map(model, args, is_binary, test_data_frame, trn_flow_1)
+
+        metrics_dict = dict((k, metrics_dict[k] + v) for k, v in metrics_it.items())
+        K.clear_session()
+        fold_nr += 1
+
+    metrics_dict = dict((k, v / nr_folds) for k, v in metrics_dict.items())
+    print_results(metrics_dict, is_binary)
+    calculate_average_precision_ks(y_pred_prob_classes, is_binary)
 
 
 def train_test_model_cv(args, is_binary, seed, batch_size, epochs, nr_folds):
@@ -163,24 +268,18 @@ def train_test_model_cv(args, is_binary, seed, batch_size, epochs, nr_folds):
                                                               is_binary, seed, batch_size)
         tst_flow = create_flow(test_data_frame, is_binary, seed, batch_size=1, shuffle=False)
 
-        model = train_or_load_model(args, trn_flow, val_flow, batch_size, filepath, epochs)
+        model = train_or_load_model(args, trn_flow, val_flow, batch_size, filepath, epochs,
+                                    trn_flow.classes, trn_flow.n, val_flow.n)
         y_pred_prob = model.predict_generator(generator=tst_flow, verbose=1, steps=tst_flow.n)
 
         y_pred_prob, y_pred, y_test = calculate_prediction(y_pred_prob, trn_flow, tst_flow, is_binary)
         metrics_it = accuracy_precision_recall_fscore(y_test, y_pred, is_binary)
         y_pred_prob_classes += list(zip(y_pred_prob.tolist(), y_test))
 
-        if is_binary:
-            print("Accuracy ----------------> {}".format(metrics_it['accuracy']))
-            print("F-Score -----------------> {}".format(metrics_it['f-score']))
-
-        else:
-            print("Accuracy ----------------> {}".format(metrics_it['accuracy']))
-            print("F-Score (micro/macro) ---> {}/{}".format(metrics_it['f-score_mi'], metrics_it['f-score_ma']))
-
+        print_fold_results(metrics_it, is_binary)
         print_classifications(args, tst_flow, y_pred)
         calculate_accuracy_per_class(y_test, y_pred)
-        draw_class_activation_map(model, args, is_binary, test_data_frame)
+        draw_class_activation_map(model, args, is_binary, test_data_frame, trn_flow)
 
         metrics_dict = dict((k, metrics_dict[k] + v) for k, v in metrics_it.items())
         K.clear_session()
