@@ -1,6 +1,6 @@
 # Classifying Geo-Referenced Photos and Satellite Images for Supporting Terrain Classification  
 
-This work was developed in the context of a MSc thesis at Instituto Superior Técnico, University of Lisbon. 
+This work was developed in the context of a MSc thesis at Instituto Superior Técnico, University of Lisbon.   
 The source code presented in this repository leverages the keras.io deep learning library (combined with scikit-learn, and other machine learning libraries) to test the usability of the DenseNet neural architure (Huang et al. 2017) to classify images regarding the presence of a flood, and the severity of that same flood.
 
     @inproceedings{huang2017densenet, 
