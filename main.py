@@ -44,27 +44,22 @@ def train_test_model(args):
                                         Dataset.flood_severity_4_classes,
                                         Dataset.flood_severity_european_floods]
 
+    args['random_seed'] = RANDOM_SEED
+    args['batch_size'] = BATCH_SIZE
+    args['is_binary'] = is_binary
+    args['epochs'] = EPOCHS
+
     if args['method'] == Method.cross_validation:
-        train_test_attention_guided_cnn(args, is_binary, RANDOM_SEED, BATCH_SIZE, EPOCHS, N_FOLDS)
+        args['nr_folds'] = N_FOLDS
+        train_test_attention_guided_cnn(args)
     if args['method'] == Method.train_test_split:
-        train_test_model_split(args, is_binary, RANDOM_SEED, BATCH_SIZE, EPOCHS)
+        train_test_model_split(args)
 
 
 def main():
     initial_configs()
     parsed_args = parse_args()
     train_test_model(parsed_args)
-
-    # custom_object = {'categorical_class_balanced_focal_loss_fixed': lambda y_true, y_pred: y_pred,
-    #                 'categorical_class_balanced_focal_loss': lambda y_true, y_pred: y_pred}
-
-    # model = load_model("weights/flood_severity_3_classes_attention_guided_global_branch_cv/weights_fold_1_from_10.hdf5",
-    #                   custom_objects=custom_object)
-
-    # input_path = "/home/jpereira/Tests/datasets/EuropeanFlood2013/imgs_small/26458059.jpg"
-    # output_path = "./26458059.bmp"
-
-    # visualize_class_activation_map(model, False, input_path, output_path, crop=False)
 
 
 if __name__ == "__main__":

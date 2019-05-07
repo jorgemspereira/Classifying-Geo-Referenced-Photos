@@ -3,6 +3,7 @@ from keras.applications import DenseNet201
 from keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
 from keras.engine.saving import load_model
 from keras.layers import GlobalAveragePooling2D, Dense, concatenate, Dropout
+from keras.models import clone_model
 from keras.optimizers import Adam
 
 from callbacks.CyclicLR import CyclicLR
@@ -58,7 +59,6 @@ def create_fused_model(number_classes, training_classes, branches_paths):
     output = Dropout(0.3)(output)
     output = Dense(16, activation=activations.relu)(output)
     output = Dense(8, activation=activations.relu)(output)
-    output = Dense(8, activation=activations.relu)(output)
 
     if number_classes == 2:
         print("Binary model.")
@@ -83,18 +83,24 @@ def get_callbacks(filepath):
     return [early_stopping, terminate_nan, cyclic_lr, checkpoint]
 
 
-def train_or_load_model(args, trn_flow, val_flow, batch_size, filepath, epochs, training_classes,
-                        training_examples, validation_examples, branch=None, branches_models=None):
+def train_or_load_model(args, trn_flow, val_flow, filepath, training_classes, training_examples,
+                        validation_examples, branch=None, branches_models=None, coisas=None):
     if args['mode'] == Mode.train:
 
         if branch == "fused":
             model = create_fused_model(len(set(training_classes)), training_classes, branches_models)
+        elif coisas is not None:
+            print("Cloning global model")
+            model = clone_model(coisas)
+            model.set_weights(coisas.get_weights())
+            model.compile(optimizer=Adam(1e-5), metrics=[metrics.categorical_accuracy],
+                          loss=[categorical_class_balanced_focal_loss(count(trn_flow.classes), beta=0.9, gamma=2.)])
         else:
             model = create_model(trn_flow, number_classes=len(set(training_classes)))
 
-        model.fit_generator(generator=trn_flow, steps_per_epoch=(training_examples // batch_size),
+        model.fit_generator(generator=trn_flow, steps_per_epoch=(training_examples // args['batch_size']),
                             validation_data=val_flow, validation_steps=validation_examples,
-                            callbacks=get_callbacks(filepath), epochs=epochs)
+                            callbacks=get_callbacks(filepath), epochs=args['epochs'])
     else:
         # FIXME
         custom_object = {'categorical_class_balanced_focal_loss_fixed': lambda y_true, y_pred: y_pred,
