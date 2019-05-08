@@ -43,6 +43,12 @@ def get_train_dataset_info(selected):
     if selected == Dataset.mediaeval2017:
         return join_full_path(MEDIA_EVAL_2017_TRAIN_DIRECTORY, MEDIA_EVAL_2017_TRAIN_LABELS)
 
+    if selected == Dataset.mediaeval2018:
+        train = join_full_path(MEDIA_EVAL_2018_TRAIN_DIRECTORY, MEDIA_EVAL_2018_TRAIN_LABELS)
+        test = join_full_path(MEDIA_EVAL_2018_TEST_DIRECTORY, MEDIA_EVAL_2018_TEST_LABELS)
+        result = train.append(test, ignore_index=True)
+        return result.drop(result[result['class'] == str(4)].index).reset_index(drop=True)
+
     if selected == Dataset.european_floods:
         return join_full_path(EUROPEAN_FLOOD_2013_DIRECTORY, EUROPEAN_FLOOD_2013_LABELS)
 

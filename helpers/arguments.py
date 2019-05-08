@@ -18,11 +18,12 @@ class Mode(Enum):
 
 class Dataset(Enum):
     mediaeval2017 = 1
-    european_floods = 2
-    both = 3
-    flood_severity_4_classes = 4
-    flood_severity_3_classes = 5
-    flood_severity_european_floods = 6
+    mediaeval2018 = 2
+    european_floods = 3
+    both = 4
+    flood_severity_4_classes = 5
+    flood_severity_3_classes = 6
+    flood_severity_european_floods = 7
 
     def __str__(self):
         return self.name
@@ -46,5 +47,20 @@ class Method(Enum):
     def from_string(s):
         try:
             return Method[s]
+        except KeyError:
+            raise ValueError()
+
+
+class Model(Enum):
+    dense_net = 1
+    attention_guided = 2
+
+    def __str__(self):
+        return self.name
+
+    @staticmethod
+    def from_string(s):
+        try:
+            return Model(s)
         except KeyError:
             raise ValueError()

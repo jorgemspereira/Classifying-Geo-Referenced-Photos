@@ -6,8 +6,8 @@ import numpy as np
 import tensorflow as tf
 from keras.backend import set_session
 
-from helpers.arguments import Mode, Dataset, Method
-from helpers.training import train_test_model_split, train_test_attention_guided_cnn
+from helpers.arguments import Mode, Dataset, Method, Model
+from helpers.training import train_test_model_split, train_test_attention_guided_cnn, train_test_model_cv
 
 RANDOM_SEED = 20
 BATCH_SIZE = 8
@@ -33,6 +33,7 @@ def parse_args():
     parser.add_argument("--mode", dest='mode', choices=list(Mode), type=Mode.from_string, required=True)
     parser.add_argument("--dataset", dest='dataset', choices=list(Dataset), type=Dataset.from_string, required=True)
     parser.add_argument("--method", dest='method', choices=list(Method), type=Method.from_string, required=True)
+    parser.add_argument("--model", dest='model', choices=list(Model), type=Model.from_string, required=True)
     parser.add_argument("--data-augmentation", dest='data_augmentation', action='store_true')
     parser.add_argument("--class-activation-map", dest='class_activation_map', action='store_true')
     parser.add_argument("--print-classifications", dest='print_classifications', action='store_true')
@@ -51,7 +52,12 @@ def train_test_model(args):
 
     if args['method'] == Method.cross_validation:
         args['nr_folds'] = N_FOLDS
-        train_test_attention_guided_cnn(args)
+
+        if args['model'] == Model.attention_guided:
+            train_test_attention_guided_cnn(args)
+        elif args['model'] == Model.dense_net:
+            train_test_model_cv(args)
+
     if args['method'] == Method.train_test_split:
         train_test_model_split(args)
 
