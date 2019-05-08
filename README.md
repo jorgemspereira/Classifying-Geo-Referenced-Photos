@@ -1,6 +1,6 @@
 # Classifying Geo-Referenced Photos and Satellite Images for Supporting Terrain Classification  
 
-The source code presented in this repository leverages the keras.io deep learning library (combined with scikit-learn, and other machine learning libraries) to test the usability of the DenseNet neural architecture (Huang et al. 2017) to classify images regarding the presence of a flood, and the severity of that same flood.
+The source code presented in this repository leverages the [keras.io](http://keras.io/) deep learning library (combined with [scikit-learn](https://scikit-learn.org/stable/), and other machine learning libraries) to test the usability of the DenseNet neural architecture (Huang et al. 2017) to classify images regarding the presence of a flood, and the severity of that same flood.
 
     @inproceedings{huang2017densenet, 
         author    = {G. Huang and Z. Liu and L. v. d. Maaten and K. Q. Weinberger}, 
@@ -75,10 +75,10 @@ project
 The "European Floods 2013" dataset can be obtained from:   
 https://github.com/cvjena/eu-flood-dataset  
 
-The dataset from "Multimedia Satelite Task from MediaEval 2017" can be obtained from:  
+The dataset from "Multimedia Satellite Task from MediaEval 2017" can be obtained from:  
 https://github.com/multimediaeval/2017-Multimedia-Satellite-Task/wiki/Data-Release  
 
-The dataset from "Multimedia Satelite Task from MediaEval 2018" can be obtained from:  
+The dataset from "Multimedia Satellite Task from MediaEval 2018" can be obtained from:  
 https://github.com/jorgemspereira/MediaEval2018-Image-Downloader  
 
 The Flood Severity labels can be found here:  
