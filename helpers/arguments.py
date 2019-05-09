@@ -61,6 +61,6 @@ class Model(Enum):
     @staticmethod
     def from_string(s):
         try:
-            return Model(s)
+            return Model[s]
         except KeyError:
             raise ValueError()
