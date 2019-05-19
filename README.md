@@ -93,3 +93,11 @@ $ python3 main.py --mode {train, load} --model {dense_net, attention_guided} --d
 ```
 
 Where the flag _data-augmentation_ will use data-augmentation to train the models; the flag _class-activation-map_ will draw the class activation maps for each test example; and _print-classifications_ will print the classification for each test example and save them in a file on the root directory.
+
+
+### Acknowledgments
+
+    - [Cyclical Learning Rate](https://github.com/bckenstler/CLR)
+    - [Focal Loss](https://github.com/umbertogriffo/focal-loss-keras)
+    
+
