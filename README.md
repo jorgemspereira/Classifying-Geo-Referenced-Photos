@@ -97,7 +97,7 @@ Where the flag _data-augmentation_ will use data-augmentation to train the model
 
 ### Acknowledgments
 
-    - [Cyclical Learning Rate](https://github.com/bckenstler/CLR)
-    - [Focal Loss](https://github.com/umbertogriffo/focal-loss-keras)
+- [Cyclical Learning Rate](https://github.com/bckenstler/CLR)
+- [Focal Loss](https://github.com/umbertogriffo/focal-loss-keras)
     
 
