@@ -7,6 +7,7 @@ import pandas as pd
 from keras.preprocessing import image
 from keras_preprocessing.image import ImageDataGenerator
 from tqdm import tqdm
+from PIL import Image
 
 from helpers.arguments import Mode
 
@@ -37,7 +38,7 @@ def calculate_prediction(y_pred_prob, trn_flow, is_binary):
     return y_pred
 
 
-def crop_attention_map(img, heat_map, output_path, threshold=155):
+def crop_attention_map(img, heat_map, output_path, threshold=75):
     ret, mask = cv2.threshold(heat_map, threshold, 255, cv2.THRESH_BINARY)
     contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -59,7 +60,27 @@ def crop_attention_map(img, heat_map, output_path, threshold=155):
         cropped_image = img
 
     output_path_cropped = output_path.replace("class_activation_maps", "cropped_class_activation_maps")
-    cv2.imwrite(output_path_cropped, cropped_image)
+    cropped_image = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2RGB)
+    cropped_image = Image.fromarray(cropped_image)
+
+    width = cropped_image.size[0]
+    height = cropped_image.size[1]
+    aspect = width / float(height)
+
+    ideal_width, ideal_height = 224, 224
+    ideal_aspect = ideal_width / float(ideal_height)
+
+    if aspect > ideal_aspect:
+        new_width = int(ideal_aspect * height)
+        offset = (width - new_width) / 2
+        resize = (offset, 0, width - offset, height)
+    else:
+        new_height = int(width / ideal_aspect)
+        offset = (height - new_height) / 2
+        resize = (0, offset, width, height - offset)
+
+    thumb = cropped_image.crop(resize).resize((ideal_width, ideal_height), Image.ANTIALIAS)
+    thumb.save(output_path_cropped)
 
 
 def visualize_class_activation_map(model, predicted_class, is_binary, input_paths, output_paths, pb=None, crop=False):
@@ -85,6 +106,11 @@ def visualize_class_activation_map(model, predicted_class, is_binary, input_path
             conv_layer_output_value[:, :, i] *= pooled_grads_value[i]
 
         heat_map = np.mean(conv_layer_output_value, axis=-1)
+
+        if (heat_map < 0).all():
+            avg = np.average(heat_map)
+            heat_map += abs(avg)
+
         heat_map = np.maximum(heat_map, 0)
         heat_map /= np.max(heat_map)
 

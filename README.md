@@ -99,5 +99,4 @@ Where the flag _data-augmentation_ will use data-augmentation to train the model
 
 - [Cyclical Learning Rate](https://github.com/bckenstler/CLR)
 - [Focal Loss](https://github.com/umbertogriffo/focal-loss-keras)
-    
-
+- [Mixup Generator](https://github.com/Tony607/keras_mixup_generator)

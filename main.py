@@ -37,6 +37,7 @@ def parse_args():
     parser.add_argument("--data-augmentation", dest='data_augmentation', action='store_true')
     parser.add_argument("--class-activation-map", dest='class_activation_map', action='store_true')
     parser.add_argument("--print-classifications", dest='print_classifications', action='store_true')
+    parser.add_argument("--mix-up", dest='mix_up', action='store_true')
     return vars(parser.parse_args())
 
 

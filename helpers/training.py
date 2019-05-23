@@ -12,6 +12,7 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 
 from helpers.class_activation_map import draw_class_activation_map, crop_and_draw_class_activation_map
 from helpers.dataset import get_test_dataset_info, get_train_dataset_info
+from helpers.mixup_generator import MixupImageDataGenerator
 from helpers.models import train_or_load_model
 
 
@@ -26,15 +27,20 @@ def check_path(filepath):
     return filepath
 
 
-def create_flow(args, df, batch_size, shuffle=True, data_augmentation=False):
+def create_flow(args, df, batch_size, shuffle=True, data_augmentation=False, mix_up=False):
     if data_augmentation:
         generator = ImageDataGenerator(rescale=1. / 255, horizontal_flip=True, brightness_range=[0.8, 1.2])
     else:
         generator = ImageDataGenerator(rescale=1. / 255)
 
-    flow = generator.flow_from_dataframe(dataframe=df, directory=None, target_size=(224, 224), shuffle=shuffle,
-                                         class_mode=get_class_mode(args['is_binary']),
-                                         seed=args['random_seed'], batch_size=batch_size)
+    if mix_up:
+        flow = MixupImageDataGenerator(generator=generator, dataframe=df, batch_size=batch_size,
+                                       target_size=(224, 224), class_mode=get_class_mode(args['is_binary']),
+                                       seed=args['random_seed'], shuffle=shuffle)
+    else:
+        flow = generator.flow_from_dataframe(dataframe=df, directory=None, target_size=(224, 224), shuffle=shuffle,
+                                             class_mode=get_class_mode(args['is_binary']),
+                                             seed=args['random_seed'], batch_size=batch_size)
     flow.reset()
     return flow
 
@@ -48,7 +54,8 @@ def get_training_and_validation_flow(args, df, split_size=0.10):
     train_data_frame = pd.DataFrame(data={'filename': x_train, 'class': y_train})
     validation_data_frame = pd.DataFrame(data={'filename': x_val, 'class': y_val})
 
-    train_flow = create_flow(args, train_data_frame, args['batch_size'], data_augmentation=args['data_augmentation'])
+    train_flow = create_flow(args, train_data_frame, args['batch_size'],
+                             data_augmentation=args['data_augmentation'], mix_up=args['mix_up'])
     validation_flow = create_flow(args, validation_data_frame, batch_size=1)
 
     return train_flow, validation_flow
@@ -170,7 +177,9 @@ def train_test_attention_guided_cnn(args):
     info = get_train_dataset_info(args['dataset'])
     x, y, = info.iloc[:, 0].values, info.iloc[:, 1].values
 
+    metrics_dict_glob, y_pred_prob_classes_glob = defaultdict(int), []
     metrics_dict, y_pred_prob_classes, fl_nr = defaultdict(int), [], 1
+
     k_fold = StratifiedKFold(n_splits=args['nr_folds'], shuffle=True, random_state=args['random_seed'])
 
     for train, test in k_fold.split(x, y):
@@ -193,10 +202,11 @@ def train_test_attention_guided_cnn(args):
         tst_flow_1 = create_flow(args, test_data_frame, batch_size=1, shuffle=False)
         y_pred_prob = model_global.predict_generator(generator=tst_flow_1, verbose=1, steps=tst_flow_1.n)
         y_pred_prob, y_pred, y_test = calculate_prediction(args, y_pred_prob, trn_flow_1, tst_flow_1)
-        metrics_it = accuracy_precision_recall_fscore(args, y_test, y_pred)
+        metrics_it_glob = accuracy_precision_recall_fscore(args, y_test, y_pred)
+        y_pred_prob_classes_glob += list(zip(y_pred_prob.tolist(), y_test))
 
         print("Global branch results.")
-        print_fold_results(args, metrics_it)
+        print_fold_results(args, metrics_it_glob)
         calculate_accuracy_per_class(y_test, y_pred)
 
         test_data_frame_2 = crop_and_draw_class_activation_map(args, model_global, test_data_frame, trn_flow_1, fl_nr)
@@ -236,9 +246,16 @@ def train_test_attention_guided_cnn(args):
         draw_class_activation_map(args, model, test_data_frame, trn_flow_1)
 
         metrics_dict = dict((k, metrics_dict[k] + v) for k, v in metrics_it.items())
+        metrics_dict_glob = dict((k, metrics_dict_glob[k] + v) for k, v in metrics_it_glob.items())
         K.clear_session()
         fl_nr += 1
 
+    print("Global branch results.")
+    metrics_dict_glob = dict((k, v / args['nr_folds']) for k, v in metrics_dict_glob.items())
+    print_results(args, metrics_dict_glob)
+    calculate_average_precision_ks(args, y_pred_prob_classes_glob)
+
+    print("Fused model results.")
     metrics_dict = dict((k, v / args['nr_folds']) for k, v in metrics_dict.items())
     print_results(args, metrics_dict)
     calculate_average_precision_ks(args, y_pred_prob_classes)
