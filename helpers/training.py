@@ -170,7 +170,7 @@ def train_test_model_split(args):
     calculate_average_precision_ks(args, y_pred_prob_classes)
     calculate_accuracy_per_class(y_test, y_pred)
 
-    draw_class_activation_map(args, model, test_df, trn_flow)
+    draw_class_activation_map(args, model, test_df)
 
 
 def train_test_attention_guided_cnn(args):
@@ -209,8 +209,8 @@ def train_test_attention_guided_cnn(args):
         print_fold_results(args, metrics_it_glob)
         calculate_accuracy_per_class(y_test, y_pred)
 
-        test_data_frame_2 = crop_and_draw_class_activation_map(args, model_global, test_data_frame, trn_flow_1, fl_nr)
-        train_data_frame_2 = crop_and_draw_class_activation_map(args, model_global, train_data_frame, trn_flow_1, fl_nr)
+        test_data_frame_2 = crop_and_draw_class_activation_map(args, model_global, test_data_frame, fl_nr)
+        train_data_frame_2 = crop_and_draw_class_activation_map(args, model_global, train_data_frame, fl_nr)
 
         trn_flow_2, val_flow_2 = get_training_and_validation_flow(args, train_data_frame_2)
         model_local = train_or_load_model(args, trn_flow_2, val_flow_2, second_branch_path,
@@ -243,7 +243,7 @@ def train_test_attention_guided_cnn(args):
         print_classifications(args, tst_flow_1, y_pred)
         calculate_accuracy_per_class(y_test, y_pred)
 
-        draw_class_activation_map(args, model, test_data_frame, trn_flow_1)
+        draw_class_activation_map(args, model, test_data_frame)
 
         metrics_dict = dict((k, metrics_dict[k] + v) for k, v in metrics_it.items())
         metrics_dict_glob = dict((k, metrics_dict_glob[k] + v) for k, v in metrics_it_glob.items())
@@ -288,7 +288,7 @@ def train_test_model_cv(args):
         print_fold_results(args, metrics_it)
         print_classifications(args, tst_flow, y_pred)
         calculate_accuracy_per_class(y_test, y_pred)
-        draw_class_activation_map(args, model, test_data_frame, trn_flow)
+        draw_class_activation_map(args, model, test_data_frame)
 
         metrics_dict = dict((k, metrics_dict[k] + v) for k, v in metrics_it.items())
         K.clear_session()

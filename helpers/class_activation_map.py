@@ -4,11 +4,12 @@ import cv2
 import keras.backend as K
 import numpy as np
 import pandas as pd
+from PIL import Image
 from keras.preprocessing import image
 from keras_preprocessing.image import ImageDataGenerator
 from tqdm import tqdm
-from PIL import Image
 
+from helpers.find_threshold import find_crop_threshold
 from helpers.arguments import Mode
 
 
@@ -25,21 +26,20 @@ def verify_probabilities(y_probs, train_flow):
     return y_probs.flatten()
 
 
-def calculate_prediction(y_pred_prob, trn_flow, is_binary):
-    if is_binary:
-        y_pred_prob = verify_probabilities(y_pred_prob, trn_flow)
-        y_pred = np.where(y_pred_prob > 0.5, 1, 0)
+def calculate_threshold(model):
+    global threshold
+    try:
+        threshold
+    except NameError:
+        print("Calculating threshold.")
+        threshold = find_crop_threshold(model)
+        return threshold
     else:
-        predicted_class_indices = np.argmax(y_pred_prob, axis=1)
-        labels = trn_flow.class_indices
-        labels = dict((v, k) for k, v in labels.items())
-        y_pred = [int(labels[k]) for k in predicted_class_indices]
-
-    return y_pred
+        return threshold
 
 
-def crop_attention_map(img, heat_map, output_path, threshold=75):
-    ret, mask = cv2.threshold(heat_map, threshold, 255, cv2.THRESH_BINARY)
+def crop_attention_map(img, heat_map, output_path, t):
+    ret, mask = cv2.threshold(heat_map, t, 255, cv2.THRESH_BINARY)
     contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
     max_area, max_index = 0, 0
@@ -119,7 +119,8 @@ def visualize_class_activation_map(model, predicted_class, is_binary, input_path
         heat_map = np.uint8(255 * heat_map)
 
         if crop:
-            crop_attention_map(img, heat_map, output_paths[index])
+            t = calculate_threshold(model)
+            crop_attention_map(img, heat_map, output_paths[index], t)
 
         heat_map = cv2.applyColorMap(heat_map, cv2.COLORMAP_JET)
         superimposed_img = heat_map * .3 + img
@@ -129,7 +130,7 @@ def visualize_class_activation_map(model, predicted_class, is_binary, input_path
             pb.update(1)
 
 
-def draw_class_activation_map(args, model, data_frame, train_flow):
+def draw_class_activation_map(args, model, data_frame):
     if not args['class_activation_map']:
         return
 
@@ -149,7 +150,7 @@ def draw_class_activation_map(args, model, data_frame, train_flow):
     flow = generator.flow_from_dataframe(dataframe=data_frame, directory=None,
                                          target_size=(224, 224), shuffle=False, batch_size=1)
     predictions = model.predict_generator(flow, verbose=1, steps=flow.n)
-    y_pred = calculate_prediction(predictions, train_flow, args['is_binary'])
+    y_pred = np.argmax(predictions, axis=1)
     print("Done.")
 
     print("Drawing class activation maps...")
@@ -167,7 +168,7 @@ def draw_class_activation_map(args, model, data_frame, train_flow):
     print("Done.")
 
 
-def crop_and_draw_class_activation_map(args, model, data_frame, train_flow, fold_nr):
+def crop_and_draw_class_activation_map(args, model, data_frame, fold_nr):
     check_path("./cropped_class_activation_maps/trained_by_{}_fold_{}".format(args["dataset"], fold_nr))
 
     output_directory = check_path("./class_activation_maps/trained_by_{}_fold_{}".format(args["dataset"], fold_nr))
@@ -193,7 +194,7 @@ def crop_and_draw_class_activation_map(args, model, data_frame, train_flow, fold
         flow = generator.flow_from_dataframe(dataframe=data_frame, directory=None,
                                              target_size=(224, 224), shuffle=False, batch_size=1)
         predictions = model.predict_generator(flow, verbose=1, steps=flow.n)
-        y_pred = calculate_prediction(predictions, train_flow, args['is_binary'])
+        y_pred = np.argmax(predictions, axis=1)
         print("Done.")
 
         print("Drawing class activation maps...")
