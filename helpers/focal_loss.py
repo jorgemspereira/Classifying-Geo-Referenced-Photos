@@ -1,9 +1,9 @@
 """
 Define our custom loss function.
 """
-from keras import backend as K
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
+from keras import backend as K
 
 
 def binary_focal_loss(gamma=2., alpha=.25):

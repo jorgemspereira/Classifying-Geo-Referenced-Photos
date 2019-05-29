@@ -196,6 +196,7 @@ def train_test_attention_guided_cnn(args):
         all_network_path = check_path(all_network_path.format(args['dataset'], fl_nr, args['nr_folds']))
 
         trn_flow_1, val_flow_1 = get_training_and_validation_flow(args, train_data_frame)
+        # trn_flow_to_c, _ = get_training_and_validation_flow(args, train_data_frame)
         model_global = train_or_load_model(args, trn_flow_1, val_flow_1, first_branch_path,
                                            trn_flow_1.classes, trn_flow_1.n, val_flow_1.n)
 

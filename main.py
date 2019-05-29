@@ -4,6 +4,7 @@ import random as rn
 
 import numpy as np
 import tensorflow as tf
+import warnings
 from keras.backend import set_session
 
 from helpers.arguments import Mode, Dataset, Method, Model
@@ -19,6 +20,7 @@ def initial_configs():
     np.random.seed(RANDOM_SEED)
     tf.set_random_seed(RANDOM_SEED)
     rn.seed(RANDOM_SEED)
+    warnings.filterwarnings("ignore", category=UserWarning, module='keras')
     np.set_printoptions(threshold=np.inf)
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     config = tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=1)

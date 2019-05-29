@@ -84,18 +84,21 @@ def get_callbacks(filepath):
     early_stopping = EarlyStopping(monitor='val_loss', patience=5, verbose=1, mode='auto', restore_best_weights=True)
     cyclic_lr = CyclicLR(base_lr=1e-5, step_size=2000., max_lr=1e-4, mode='triangular2')
     terminate_nan = TerminateOnNaN()
+    # update_loss = UpdateLoss(trn_flow, adjusted_loss)
 
     return [early_stopping, terminate_nan, cyclic_lr, checkpoint]
 
 
 def train_or_load_model(args, trn_flow, val_flow, filepath, training_classes, training_examples,
                         validation_examples, branch=None, branches_models=None):
+    # adjusted_loss = K.variable(0.)
+
     if args['mode'] == Mode.train:
 
         if branch == "fused":
             model = create_fused_model(len(set(training_classes)), training_classes, branches_models)
         else:
-            model = create_model(trn_flow, number_classes=len(set(training_classes)))
+            model = create_model(trn_flow, number_classes=len(set(training_classes)))  # , adjusted_loss=adjusted_loss)
 
         model.fit_generator(generator=trn_flow, steps_per_epoch=(training_examples // args['batch_size']),
                             validation_data=val_flow, validation_steps=validation_examples,
