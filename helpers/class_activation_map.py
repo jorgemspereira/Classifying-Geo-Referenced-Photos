@@ -26,19 +26,19 @@ def verify_probabilities(y_probs, train_flow):
     return y_probs.flatten()
 
 
-def calculate_threshold(model):
+def calculate_threshold(args, model):
     global threshold
     try:
         threshold
     except NameError:
         print("Calculating threshold.")
-        threshold = find_crop_threshold(model)
+        threshold = find_crop_threshold(args, model)
         return threshold
     else:
         return threshold
 
 
-def crop_attention_map(img, heat_map, output_path, t):
+def crop_attention_map(args, img, heat_map, output_path, t):
     ret, mask = cv2.threshold(heat_map, t, 255, cv2.THRESH_BINARY)
     contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -67,7 +67,7 @@ def crop_attention_map(img, heat_map, output_path, t):
     height = cropped_image.size[1]
     aspect = width / float(height)
 
-    ideal_width, ideal_height = 224, 224
+    ideal_width, ideal_height = args['image_size'], args['image_size']
     ideal_aspect = ideal_width / float(ideal_height)
 
     if aspect > ideal_aspect:
@@ -83,10 +83,11 @@ def crop_attention_map(img, heat_map, output_path, t):
     thumb.save(output_path_cropped)
 
 
-def visualize_class_activation_map(model, predicted_class, is_binary, input_paths, output_paths, pb=None, crop=False):
+def visualize_class_activation_map(args, model, predicted_class, is_binary,
+                                   input_paths, output_paths, pb=None, crop=False):
     images = []
     for img in input_paths:
-        x = image.load_img(img, target_size=(224, 224))
+        x = image.load_img(img, target_size=(args['image_size'], args['image_size']))
         x = image.img_to_array(x)
         x = np.divide(x, 255)
         x = np.expand_dims(x, axis=0)
@@ -119,8 +120,8 @@ def visualize_class_activation_map(model, predicted_class, is_binary, input_path
         heat_map = np.uint8(255 * heat_map)
 
         if crop:
-            t = calculate_threshold(model)
-            crop_attention_map(img, heat_map, output_paths[index], t)
+            t = calculate_threshold(args, model)
+            crop_attention_map(args, img, heat_map, output_paths[index], t)
 
         heat_map = cv2.applyColorMap(heat_map, cv2.COLORMAP_JET)
         superimposed_img = heat_map * .3 + img
@@ -148,7 +149,8 @@ def draw_class_activation_map(args, model, data_frame):
     print("Predicting images to generate class activation maps...")
     generator = ImageDataGenerator(rescale=1. / 255)
     flow = generator.flow_from_dataframe(dataframe=data_frame, directory=None,
-                                         target_size=(224, 224), shuffle=False, batch_size=1)
+                                         target_size=(args['image_size'], args['image_size']),
+                                         shuffle=False, batch_size=1)
     predictions = model.predict_generator(flow, verbose=1, steps=flow.n)
     y_pred = np.argmax(predictions, axis=1)
     print("Done.")
@@ -162,7 +164,7 @@ def draw_class_activation_map(args, model, data_frame):
         elements = [x for x in items if x[0] == c]
         inputs = [x[1] for x in elements]
         outputs = [x[2] for x in elements]
-        visualize_class_activation_map(model, c, args['is_binary'], inputs, outputs, pb=progress_bar)
+        visualize_class_activation_map(args, model, c, args['is_binary'], inputs, outputs, pb=progress_bar)
 
     progress_bar.close()
     print("Done.")
@@ -192,7 +194,8 @@ def crop_and_draw_class_activation_map(args, model, data_frame, fold_nr):
         print("Predicting images to generate class activation maps...")
         generator = ImageDataGenerator(rescale=1. / 255)
         flow = generator.flow_from_dataframe(dataframe=data_frame, directory=None,
-                                             target_size=(224, 224), shuffle=False, batch_size=1)
+                                             target_size=(args['image_size'], args['image_size']),
+                                             shuffle=False, batch_size=1)
         predictions = model.predict_generator(flow, verbose=1, steps=flow.n)
         y_pred = np.argmax(predictions, axis=1)
         print("Done.")
@@ -206,7 +209,8 @@ def crop_and_draw_class_activation_map(args, model, data_frame, fold_nr):
             elements = [x for x in items if x[0] == c]
             inputs = [x[1] for x in elements]
             outputs = [x[2] for x in elements]
-            visualize_class_activation_map(model, c, args['is_binary'], inputs, outputs, pb=progress_bar, crop=True)
+            visualize_class_activation_map(args, model, c, args['is_binary'], inputs,
+                                           outputs, pb=progress_bar, crop=True)
 
         progress_bar.close()
         print("Done.")

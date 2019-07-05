@@ -31,11 +31,11 @@ def read_json():
     return data
 
 
-def calculate_heat_map_aux(model, predicted_class, input_paths, output_paths):
+def calculate_heat_map_aux(args, model, predicted_class, input_paths, output_paths):
     images, result = [], {}
 
     for img in input_paths:
-        x = image.load_img(img, target_size=(224, 224))
+        x = image.load_img(img, target_size=(args['image_size'], args['image_size']))
         x = image.img_to_array(x)
         x = np.divide(x, 255)
         x = np.expand_dims(x, axis=0)
@@ -76,12 +76,13 @@ def calculate_heat_map_aux(model, predicted_class, input_paths, output_paths):
     return result
 
 
-def calculate_heat_map(model, data_frame):
+def calculate_heat_map(args, model, data_frame):
     inputs, outputs, result = [], [], {}
 
     generator = ImageDataGenerator(rescale=1. / 255)
     flow = generator.flow_from_dataframe(dataframe=data_frame, directory=None,
-                                         target_size=(224, 224), shuffle=False, batch_size=1)
+                                         target_size=(args['image_size'], args['image_size']),
+                                         shuffle=False, batch_size=1)
     predictions = model.predict_generator(flow, verbose=1, steps=flow.n)
     y_pred = np.argmax(predictions, axis=1)
 
@@ -98,12 +99,12 @@ def calculate_heat_map(model, data_frame):
         elements = [x for x in items if x[0] == c]
         inputs = [x[1] for x in elements]
         outputs = [x[2] for x in elements]
-        result.update(calculate_heat_map_aux(model, c, inputs, outputs))
+        result.update(calculate_heat_map_aux(args, model, c, inputs, outputs))
 
     return result
 
 
-def crop_heat_map(heat_map, threshold=125):
+def crop_heat_map(args, heat_map, threshold=125):
     ret, mask = cv2.threshold(heat_map, threshold, 255, cv2.THRESH_BINARY)
     contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -117,7 +118,7 @@ def crop_heat_map(heat_map, threshold=125):
     x, y, width, height = cv2.boundingRect(contours[max_index])
     aspect = width / float(height)
 
-    ideal_width, ideal_height = 224, 224
+    ideal_width, ideal_height = args['image_size'], args['image_size']
     ideal_aspect = ideal_width / float(ideal_height)
 
     if aspect > ideal_aspect:
@@ -162,7 +163,7 @@ def build_data_frame(content):
     return pd.DataFrame(list(result.items()), columns=['filename', 'class'])
 
 
-def calculate_scores(heat_maps, bounding_boxes):
+def calculate_scores(args, heat_maps, bounding_boxes):
     result = []
 
     for key in heat_maps.keys():
@@ -170,7 +171,7 @@ def calculate_scores(heat_maps, bounding_boxes):
         max_threshold = 0
 
         for threshold in range(1, 250):
-            attention = crop_heat_map(heat_maps[key], threshold)
+            attention = crop_heat_map(args, heat_maps[key], threshold)
             bboxes = bounding_boxes[key]
             metric = intersection_over_union(attention, bboxes)
 
@@ -196,10 +197,10 @@ def calculate_scores(heat_maps, bounding_boxes):
     return final_result
 
 
-def find_crop_threshold(model):
+def find_crop_threshold(args, model):
     content = read_json()
     bounding_boxes = get_bounding_boxes(content)
 
     data_frame = build_data_frame(content)
-    heat_maps = calculate_heat_map(model, data_frame)
-    return calculate_scores(heat_maps, bounding_boxes)
+    heat_maps = calculate_heat_map(args, model, data_frame)
+    return calculate_scores(args, heat_maps, bounding_boxes)

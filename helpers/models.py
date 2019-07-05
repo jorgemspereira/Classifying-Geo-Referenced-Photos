@@ -3,7 +3,8 @@ from keras import activations, losses, metrics, Model
 from keras.applications import DenseNet201
 from keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
 from keras.engine.saving import load_model
-from keras.layers import GlobalAveragePooling2D, Dense, concatenate, Dropout
+from keras.layers import GlobalAveragePooling2D, Dense, concatenate
+from keras.models import clone_model
 from keras.optimizers import Adam
 
 from callbacks.CyclicLR import CyclicLR
@@ -56,7 +57,6 @@ def create_fused_model(number_classes, training_classes, branches_paths):
     last_avgpooling_global = global_branch_model.get_layer("global_average_pooling2d_layer_m1")
     last_avgpooling_local = local_branch_model.get_layer("global_average_pooling2d_layer")
     output = concatenate([last_avgpooling_global.output, last_avgpooling_local.output])
-    output = Dropout(0.3)(output)
 
     if number_classes == 2:
         print("Binary model.")
@@ -80,25 +80,28 @@ def create_fused_model(number_classes, training_classes, branches_paths):
 
 
 def get_callbacks(filepath):
-    checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, mode='auto', save_best_only=True)
-    early_stopping = EarlyStopping(monitor='val_loss', patience=5, verbose=1, mode='auto', restore_best_weights=True)
-    cyclic_lr = CyclicLR(base_lr=1e-5, step_size=2000., max_lr=1e-4, mode='triangular2')
-    terminate_nan = TerminateOnNaN()
-    # update_loss = UpdateLoss(trn_flow, adjusted_loss)
-
-    return [early_stopping, terminate_nan, cyclic_lr, checkpoint]
+    return [
+        ModelCheckpoint(filepath, monitor='val_loss', verbose=1, mode='auto', save_best_only=True),
+        EarlyStopping(monitor='val_loss', patience=5, verbose=1, mode='auto', restore_best_weights=True),
+        CyclicLR(base_lr=1e-5, step_size=1000., max_lr=1e-4, mode='triangular2'),
+        TerminateOnNaN()
+    ]
 
 
 def train_or_load_model(args, trn_flow, val_flow, filepath, training_classes, training_examples,
-                        validation_examples, branch=None, branches_models=None):
-    # adjusted_loss = K.variable(0.)
+                        validation_examples, branches_models=None, pre_trained_model=None):
 
     if args['mode'] == Mode.train:
+        if pre_trained_model is not None:
+            model = clone_model(pre_trained_model)
+            model.set_weights(pre_trained_model.get_weights())
+            model.compile(optimizer=Adam(lr=1e-4), metrics=[metrics.categorical_accuracy],
+                          loss=[categorical_class_balanced_focal_loss(count(training_classes), beta=0.9, gamma=2.)])
 
-        if branch == "fused":
+        elif branches_models is not None:
             model = create_fused_model(len(set(training_classes)), training_classes, branches_models)
         else:
-            model = create_model(trn_flow, number_classes=len(set(training_classes)))  # , adjusted_loss=adjusted_loss)
+            model = create_model(trn_flow, number_classes=len(set(training_classes)))
 
         model.fit_generator(generator=trn_flow, steps_per_epoch=(training_examples // args['batch_size']),
                             validation_data=val_flow, validation_steps=validation_examples,

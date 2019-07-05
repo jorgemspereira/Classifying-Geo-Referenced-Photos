@@ -29,16 +29,20 @@ def check_path(filepath):
 
 def create_flow(args, df, batch_size, shuffle=True, data_augmentation=False, mix_up=False):
     if data_augmentation:
-        generator = ImageDataGenerator(rescale=1. / 255, horizontal_flip=True, brightness_range=[0.8, 1.2])
+        generator = ImageDataGenerator(rescale=1. / 255,
+                                       horizontal_flip=True,
+                                       brightness_range=[0.8, 1.2])
     else:
         generator = ImageDataGenerator(rescale=1. / 255)
 
     if mix_up:
-        flow = MixupImageDataGenerator(generator=generator, dataframe=df, batch_size=batch_size,
-                                       target_size=(224, 224), class_mode=get_class_mode(args['is_binary']),
+        flow = MixupImageDataGenerator(generator=generator, target_size=(args['image_size'], args['image_size']),
+                                       dataframe=df, batch_size=batch_size,
+                                       class_mode=get_class_mode(args['is_binary']),
                                        seed=args['random_seed'], shuffle=shuffle)
     else:
-        flow = generator.flow_from_dataframe(dataframe=df, directory=None, target_size=(224, 224), shuffle=shuffle,
+        flow = generator.flow_from_dataframe(dataframe=df, directory=None, shuffle=shuffle,
+                                             target_size=(args['image_size'], args['image_size']),
                                              class_mode=get_class_mode(args['is_binary']),
                                              seed=args['random_seed'], batch_size=batch_size)
     flow.reset()
@@ -196,7 +200,6 @@ def train_test_attention_guided_cnn(args):
         all_network_path = check_path(all_network_path.format(args['dataset'], fl_nr, args['nr_folds']))
 
         trn_flow_1, val_flow_1 = get_training_and_validation_flow(args, train_data_frame)
-        # trn_flow_to_c, _ = get_training_and_validation_flow(args, train_data_frame)
         model_global = train_or_load_model(args, trn_flow_1, val_flow_1, first_branch_path,
                                            trn_flow_1.classes, trn_flow_1.n, val_flow_1.n)
 
@@ -232,7 +235,7 @@ def train_test_attention_guided_cnn(args):
 
         models = {"model_global": model_global, "model_local": model_local}
         model = train_or_load_model(args, trn_flow_merged, val_flow_merged, all_network_path, trn_flow_1.classes,
-                                    trn_flow_1.n, val_flow_1.n, branch="fused", branches_models=models)
+                                    trn_flow_1.n, val_flow_1.n, branches_models=models)
 
         y_pred_prob = model.predict_generator(generator=tst_flow_merged, verbose=1, steps=tst_flow_1.n)
         y_pred_prob, y_pred, y_test = calculate_prediction(args, y_pred_prob, trn_flow_1, tst_flow_1)

@@ -11,7 +11,8 @@ from helpers.arguments import Mode, Dataset, Method, Model
 from helpers.training import train_test_model_split, train_test_attention_guided_cnn, train_test_model_cv
 
 RANDOM_SEED = 20
-BATCH_SIZE = 8
+IMAGE_SZ = 224
+BATCH_SIZE = 16
 N_FOLDS = 10
 EPOCHS = 50
 
@@ -51,6 +52,7 @@ def train_test_model(args):
     args['random_seed'] = RANDOM_SEED
     args['batch_size'] = BATCH_SIZE
     args['is_binary'] = is_binary
+    args['image_size'] = IMAGE_SZ
     args['epochs'] = EPOCHS
 
     if args['method'] == Method.cross_validation:
