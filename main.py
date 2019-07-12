@@ -8,7 +8,8 @@ import warnings
 from keras.backend import set_session
 
 from helpers.arguments import Mode, Dataset, Method, Model
-from helpers.training import train_test_model_split, train_test_attention_guided_cnn, train_test_model_cv
+from helpers.training import train_test_dense_net_split, train_test_attention_guided_cnn_cv, train_test_dense_net_cv, \
+    train_test_attention_guided_cnn_split
 
 RANDOM_SEED = 20
 IMAGE_SZ = 224
@@ -59,12 +60,15 @@ def train_test_model(args):
         args['nr_folds'] = N_FOLDS
 
         if args['model'] == Model.attention_guided:
-            train_test_attention_guided_cnn(args)
+            train_test_attention_guided_cnn_cv(args)
         elif args['model'] == Model.dense_net:
-            train_test_model_cv(args)
+            train_test_dense_net_cv(args)
 
     if args['method'] == Method.train_test_split:
-        train_test_model_split(args)
+        if args['model'] == Model.attention_guided:
+            train_test_attention_guided_cnn_split(args)
+        elif args['model'] == Model.dense_net:
+            train_test_dense_net_split(args)
 
 
 def main():

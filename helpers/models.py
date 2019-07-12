@@ -3,7 +3,7 @@ from keras import activations, losses, metrics, Model
 from keras.applications import DenseNet201
 from keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
 from keras.engine.saving import load_model
-from keras.layers import GlobalAveragePooling2D, Dense, concatenate
+from keras.layers import GlobalAveragePooling2D, Dense, concatenate, Dropout
 from keras.models import clone_model
 from keras.optimizers import Adam
 
@@ -57,6 +57,7 @@ def create_fused_model(number_classes, training_classes, branches_paths):
     last_avgpooling_global = global_branch_model.get_layer("global_average_pooling2d_layer_m1")
     last_avgpooling_local = local_branch_model.get_layer("global_average_pooling2d_layer")
     output = concatenate([last_avgpooling_global.output, last_avgpooling_local.output])
+    output = Dropout(0.5)(output)
 
     if number_classes == 2:
         print("Binary model.")
@@ -67,14 +68,13 @@ def create_fused_model(number_classes, training_classes, branches_paths):
         print("{} number of classes.".format(number_classes))
         predictions = Dense(number_classes, activation=activations.softmax)(output)
         model = Model(inputs=[global_branch_model.input, local_branch_model.input], outputs=predictions)
-
-        model.layers[-1].set_weights([np.concatenate((global_branch_model.layers[-1].get_weights()[0],
-                                                      local_branch_model.layers[-1].get_weights()[0])),
-                                      np.mean(np.array([global_branch_model.layers[-1].get_weights()[1],
-                                                        local_branch_model.layers[-1].get_weights()[1]]), axis=0)])
-
         model.compile(optimizer=optimizer, metrics=[metrics.categorical_accuracy],
                       loss=[categorical_class_balanced_focal_loss(count(training_classes), beta=0.9, gamma=2.)])
+
+    model.layers[-1].set_weights([np.concatenate((global_branch_model.layers[-1].get_weights()[0],
+                                                  local_branch_model.layers[-1].get_weights()[0])),
+                                  np.mean(np.array([global_branch_model.layers[-1].get_weights()[1],
+                                                    local_branch_model.layers[-1].get_weights()[1]]), axis=0)])
 
     return model
 

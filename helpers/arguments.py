@@ -20,7 +20,7 @@ class Dataset(Enum):
     mediaeval2017 = 1
     mediaeval2018 = 2
     european_floods = 3
-    both = 4
+    all = 4
     flood_severity_4_classes = 5
     flood_severity_3_classes = 6
     flood_severity_european_floods = 7

@@ -52,13 +52,13 @@ def get_train_dataset_info(selected):
     if selected == Dataset.european_floods:
         return join_full_path(EUROPEAN_FLOOD_2013_DIRECTORY, EUROPEAN_FLOOD_2013_LABELS)
 
-    if selected == Dataset.both:
+    if selected == Dataset.all:
         european_floods = join_full_path(EUROPEAN_FLOOD_2013_DIRECTORY, EUROPEAN_FLOOD_2013_LABELS)
         media_eval_2017 = join_full_path(MEDIA_EVAL_2017_TRAIN_DIRECTORY, MEDIA_EVAL_2017_TRAIN_LABELS)
-        # media_eval_2018_train = join_full_path(MEDIA_EVAL_2018_TRAIN_DIRECTORY, MEDIA_EVAL_2018_TRAIN_LABELS)
-        # media_eval_2018_test = join_full_path(MEDIA_EVAL_2018_TEST_DIRECTORY, MEDIA_EVAL_2018_TEST_LABELS)
+        media_eval_2018_train = join_full_path(MEDIA_EVAL_2018_TRAIN_DIRECTORY, MEDIA_EVAL_2018_TRAIN_LABELS)
+        media_eval_2018_test = join_full_path(MEDIA_EVAL_2018_TEST_DIRECTORY, MEDIA_EVAL_2018_TEST_LABELS)
         result = european_floods.append(media_eval_2017, ignore_index=True)
-        # result = result.append(media_eval_2018_train, ignore_index=True).append(media_eval_2018_test, ignore_index=True)
+        result = result.append(media_eval_2018_train, ignore_index=True).append(media_eval_2018_test, ignore_index=True)
         return result.drop(result[result['class'] == str(4)].index).reset_index(drop=True)
 
     if selected == Dataset.flood_severity_4_classes or selected == Dataset.flood_severity_3_classes:

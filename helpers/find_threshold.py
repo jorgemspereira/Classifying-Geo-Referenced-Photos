@@ -42,7 +42,7 @@ def calculate_heat_map_aux(args, model, predicted_class, input_paths, output_pat
         images.append(x)
 
     last_conv_layer = model.get_layer("conv5_block32_2_conv")
-    output = model.output[:, predicted_class]
+    output = model.output[:, 0] if args['is_binary'] else model.output[:, predicted_class]
 
     grads = K.gradients(output, last_conv_layer.output)[0]
     pooled_grads = K.mean(grads, axis=(0, 1, 2))
@@ -84,7 +84,10 @@ def calculate_heat_map(args, model, data_frame):
                                          target_size=(args['image_size'], args['image_size']),
                                          shuffle=False, batch_size=1)
     predictions = model.predict_generator(flow, verbose=1, steps=flow.n)
-    y_pred = np.argmax(predictions, axis=1)
+    if args['is_binary']:
+        y_pred = np.where(predictions > 0.5, 1, 0)
+    else:
+        y_pred = np.argmax(predictions, axis=1)
 
     for index, row in data_frame.iterrows():
         input_path, photo = row[0], row[0].split("/")[-1].replace("jpg", "bmp")
@@ -93,7 +96,7 @@ def calculate_heat_map(args, model, data_frame):
         inputs.append(input_path)
 
     items = list(zip(y_pred, inputs, outputs))
-    number_of_classes = len(set(y_pred))
+    number_of_classes = 2 if args['is_binary'] else 3
 
     for c in range(number_of_classes):
         elements = [x for x in items if x[0] == c]
@@ -171,9 +174,12 @@ def calculate_scores(args, heat_maps, bounding_boxes):
         max_threshold = 0
 
         for threshold in range(1, 250):
-            attention = crop_heat_map(args, heat_maps[key], threshold)
-            bboxes = bounding_boxes[key]
-            metric = intersection_over_union(attention, bboxes)
+            try:
+                attention = crop_heat_map(args, heat_maps[key], threshold)
+                bboxes = bounding_boxes[key]
+                metric = intersection_over_union(attention, bboxes)
+            except IndexError:
+                continue
 
             if metric >= max_result:
                 max_result = metric

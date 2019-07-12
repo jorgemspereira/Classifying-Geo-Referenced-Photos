@@ -152,7 +152,7 @@ def calculate_average_precision_ks(args, lst, ks=(50, 100, 250, 480)):
         print("Average Precision @ {} -> {}".format(ks, score / len(ks)))
 
 
-def train_test_model_split(args):
+def train_test_dense_net_split(args):
     filepath = check_path("weights/{}_split/weights.hdf5".format(args['dataset']))
 
     train_df = get_train_dataset_info(args['dataset'])
@@ -177,7 +177,74 @@ def train_test_model_split(args):
     draw_class_activation_map(args, model, test_df)
 
 
-def train_test_attention_guided_cnn(args):
+def train_test_attention_guided_cnn_split(args):
+    train_df = get_train_dataset_info(args['dataset'])
+    test_df = get_test_dataset_info(args['dataset'])
+
+    first_branch_path = "weights/{}_attention_guided_global_branch/weights.hdf5"
+    first_branch_path = check_path(first_branch_path.format(args['dataset']))
+
+    second_branch_path = "weights/{}_attention_guided_local_branch/weights.hdf5"
+    second_branch_path = check_path(second_branch_path.format(args['dataset']))
+
+    all_network_path = "weights/{}_attention_guided_all/weights.hdf5"
+    all_network_path = check_path(all_network_path.format(args['dataset']))
+
+    trn_flow_1, val_flow_1 = get_training_and_validation_flow(args, train_df)
+    model_global = train_or_load_model(args, trn_flow_1, val_flow_1, first_branch_path,
+                                       trn_flow_1.classes, trn_flow_1.n, val_flow_1.n)
+
+    tst_flow_1 = create_flow(args, test_df, batch_size=1, shuffle=False)
+    y_pred_prob = model_global.predict_generator(generator=tst_flow_1, verbose=1, steps=tst_flow_1.n)
+
+    y_pred_prob, y_pred, y_test = calculate_prediction(args, y_pred_prob, trn_flow_1, tst_flow_1)
+    metrics_dict = accuracy_precision_recall_fscore(args, y_test, y_pred)
+    y_pred_prob_classes = list(zip(y_pred_prob.tolist(), y_test))
+
+    print("Global branch results.")
+    print_results(args, metrics_dict)
+    calculate_accuracy_per_class(y_test, y_pred)
+    calculate_average_precision_ks(args, y_pred_prob_classes)
+
+    test_data_frame_2 = crop_and_draw_class_activation_map(args, model_global, test_df)
+    train_data_frame_2 = crop_and_draw_class_activation_map(args, model_global, train_df)
+
+    trn_flow_2, val_flow_2 = get_training_and_validation_flow(args, train_data_frame_2)
+    model_local = train_or_load_model(args, trn_flow_2, val_flow_2, second_branch_path,
+                                      trn_flow_2.classes, trn_flow_2.n, val_flow_2.n)
+
+    tst_flow_2 = create_flow(args, test_data_frame_2, batch_size=1, shuffle=False)
+    y_pred_prob = model_local.predict_generator(generator=tst_flow_2, verbose=1, steps=tst_flow_2.n)
+    y_pred_prob, y_pred, y_test = calculate_prediction(args, y_pred_prob, trn_flow_2, tst_flow_2)
+    metrics_dict = accuracy_precision_recall_fscore(args, y_test, y_pred)
+    y_pred_prob_classes = list(zip(y_pred_prob.tolist(), y_test))
+
+    print("Local branch results.")
+    print_results(args, metrics_dict)
+    calculate_accuracy_per_class(y_test, y_pred)
+    calculate_average_precision_ks(args, y_pred_prob_classes)
+
+    trn_flow_merged = merge_generators(trn_flow_1, trn_flow_2)
+    val_flow_merged = merge_generators(val_flow_1, val_flow_2)
+    tst_flow_merged = merge_generators(tst_flow_1, tst_flow_2)
+
+    models = {"model_global": model_global, "model_local": model_local}
+    model = train_or_load_model(args, trn_flow_merged, val_flow_merged, all_network_path, trn_flow_1.classes,
+                                trn_flow_1.n, val_flow_1.n, branches_models=models)
+
+    y_pred_prob = model.predict_generator(generator=tst_flow_merged, verbose=1, steps=tst_flow_1.n)
+    y_pred_prob, y_pred, y_test = calculate_prediction(args, y_pred_prob, trn_flow_1, tst_flow_1)
+    metrics_dict = accuracy_precision_recall_fscore(args, y_test, y_pred)
+    y_pred_prob_classes = list(zip(y_pred_prob.tolist(), y_test))
+
+    print("Fused model results.")
+    print_results(args, metrics_dict)
+    print_classifications(args, tst_flow_1, y_pred)
+    calculate_accuracy_per_class(y_test, y_pred)
+    calculate_average_precision_ks(args, y_pred_prob_classes)
+
+
+def train_test_attention_guided_cnn_cv(args):
     info = get_train_dataset_info(args['dataset'])
     x, y, = info.iloc[:, 0].values, info.iloc[:, 1].values
 
@@ -265,7 +332,7 @@ def train_test_attention_guided_cnn(args):
     calculate_average_precision_ks(args, y_pred_prob_classes)
 
 
-def train_test_model_cv(args):
+def train_test_dense_net_cv(args):
     info = get_train_dataset_info(args['dataset'])
     x, y, = info.iloc[:, 0].values, info.iloc[:, 1].values
 

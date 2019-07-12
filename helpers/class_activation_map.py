@@ -170,12 +170,16 @@ def draw_class_activation_map(args, model, data_frame):
     print("Done.")
 
 
-def crop_and_draw_class_activation_map(args, model, data_frame, fold_nr):
-    check_path("./cropped_class_activation_maps/trained_by_{}_fold_{}".format(args["dataset"], fold_nr))
+def crop_and_draw_class_activation_map(args, model, data_frame, fold_nr=None):
 
-    output_directory = check_path("./class_activation_maps/trained_by_{}_fold_{}".format(args["dataset"], fold_nr))
+    if fold_nr is None:
+        check_path("./cropped_class_activation_maps/trained_by_{}".format(args["dataset"]))
+        output_directory = check_path("./class_activation_maps/trained_by_{}".format(args["dataset"]))
+    else:
+        check_path("./cropped_class_activation_maps/trained_by_{}_fold_{}".format(args["dataset"], fold_nr))
+        output_directory = check_path("./class_activation_maps/trained_by_{}_fold_{}".format(args["dataset"], fold_nr))
+
     output_directory = os.path.abspath(output_directory)
-
     result_df = pd.DataFrame(columns=['filename', 'class'])
     outputs, inputs = [], []
 
@@ -197,14 +201,17 @@ def crop_and_draw_class_activation_map(args, model, data_frame, fold_nr):
                                              target_size=(args['image_size'], args['image_size']),
                                              shuffle=False, batch_size=1)
         predictions = model.predict_generator(flow, verbose=1, steps=flow.n)
-        y_pred = np.argmax(predictions, axis=1)
+        if args['is_binary']:
+            y_pred = np.where(predictions > 0.5, 1, 0)
+        else:
+            y_pred = np.argmax(predictions, axis=1)
         print("Done.")
 
         print("Drawing class activation maps...")
         progress_bar = tqdm(total=len(inputs))
 
         items = list(zip(y_pred, inputs, outputs))
-        number_of_classes = len(set(y_pred))
+        number_of_classes = 2 if args['is_binary'] else 3
         for c in range(number_of_classes):
             elements = [x for x in items if x[0] == c]
             inputs = [x[1] for x in elements]
