@@ -8,8 +8,8 @@ from keras.models import clone_model
 from keras.optimizers import Adam
 
 from callbacks.CyclicLR import CyclicLR
-from helpers.arguments import Mode
-from helpers.focal_loss import categorical_class_balanced_focal_loss
+from helpers.arguments import Mode, Dataset
+from helpers.custom_layers import OutputLayer
 
 
 def count(lst):
@@ -19,30 +19,44 @@ def count(lst):
     return result
 
 
-def create_model(trn_flow, number_classes):
+def create_model(args, branch):
     base_model = DenseNet201(include_top=False, weights='imagenet')
-    optimizer = Adam(lr=1e-5)
+    optz = Adam(lr=1e-5)
 
     x = base_model.output
     x = GlobalAveragePooling2D(name="global_average_pooling2d_layer")(x)
 
-    if number_classes == 2:
-        print("Binary model.")
-        predictions = Dense(1, activation=activations.sigmoid)(x)
-        model = Model(inputs=base_model.input, outputs=predictions)
-        model.compile(optimizer=optimizer, loss=losses.binary_crossentropy, metrics=[metrics.binary_accuracy])
+    if args['dataset'] != Dataset.flood_heights:
+
+        if args['is_binary']:
+            print("Binary model.")
+            predictions = Dense(1, activation=activations.sigmoid)(x)
+            model = Model(inputs=base_model.input, outputs=predictions)
+            model.compile(optimizer=optz, loss=losses.binary_crossentropy, metrics=[metrics.binary_accuracy])
+
+        else:
+            print("3 number of classes.")
+            predictions = Dense(3, activation=activations.softmax)(x)
+            model = Model(inputs=base_model.input, outputs=predictions)
+            model.compile(optimizer=optz, metrics=[metrics.categorical_accuracy], loss=losses.categorical_crossentropy)
+
     else:
-        print("{} number of classes.".format(number_classes))
-        predictions = Dense(number_classes, activation=activations.softmax)(x)
-        model = Model(inputs=base_model.input, outputs=predictions)
-        model.compile(optimizer=optimizer, metrics=[metrics.categorical_accuracy],
-                      loss=[categorical_class_balanced_focal_loss(count(trn_flow.classes), beta=0.9, gamma=2.)])
+        print("Regression model.")
+        base_model = load_model("/home/jpereira/Tests/weights/" +
+                                "flood_severity_3_classes_attention_guided_{}_branch_cv/".format(branch) +
+                                "weights_fold_1_from_10.hdf5")
+
+        predictions_values = Dense(1, activation="relu", name="dense_relu")(base_model.layers[-2].output)
+        predictions = OutputLayer()([base_model.layers[-1].output, predictions_values])
+
+        model = Model(inputs=base_model.input, outputs=[base_model.layers[-1].output, predictions])
+        model.compile(optimizer=optz, loss=[losses.categorical_crossentropy, losses.mean_squared_error])
 
     return model
 
 
-def create_fused_model(number_classes, training_classes, branches_paths):
-    optimizer = Adam(lr=1e-5)
+def create_fused_model(args, branches_paths):
+    optz = Adam(lr=1e-5)
 
     global_branch_model = branches_paths["model_global"]
     local_branch_model = branches_paths["model_local"]
@@ -56,25 +70,54 @@ def create_fused_model(number_classes, training_classes, branches_paths):
 
     last_avgpooling_global = global_branch_model.get_layer("global_average_pooling2d_layer_m1")
     last_avgpooling_local = local_branch_model.get_layer("global_average_pooling2d_layer")
+
     output = concatenate([last_avgpooling_global.output, last_avgpooling_local.output])
     output = Dropout(0.5)(output)
 
-    if number_classes == 2:
-        print("Binary model.")
-        predictions = Dense(1, activation=activations.sigmoid)(output)
-        model = Model(inputs=[global_branch_model.input, local_branch_model.input], outputs=predictions)
-        model.compile(optimizer=optimizer, loss=losses.binary_crossentropy, metrics=[metrics.binary_accuracy])
-    else:
-        print("{} number of classes.".format(number_classes))
-        predictions = Dense(number_classes, activation=activations.softmax)(output)
-        model = Model(inputs=[global_branch_model.input, local_branch_model.input], outputs=predictions)
-        model.compile(optimizer=optimizer, metrics=[metrics.categorical_accuracy],
-                      loss=[categorical_class_balanced_focal_loss(count(training_classes), beta=0.9, gamma=2.)])
+    if args['dataset'] != Dataset.flood_heights:
 
-    model.layers[-1].set_weights([np.concatenate((global_branch_model.layers[-1].get_weights()[0],
-                                                  local_branch_model.layers[-1].get_weights()[0])),
-                                  np.mean(np.array([global_branch_model.layers[-1].get_weights()[1],
-                                                    local_branch_model.layers[-1].get_weights()[1]]), axis=0)])
+        if args['is_binary']:
+            print("Binary model.")
+            predictions = Dense(1, activation=activations.sigmoid)(output)
+            model = Model(inputs=[global_branch_model.input, local_branch_model.input], outputs=predictions)
+            model.compile(optimizer=optz, loss=losses.binary_crossentropy, metrics=[metrics.binary_accuracy])
+
+        else:
+            print("3 number of classes.")
+            predictions = Dense(3, activation=activations.softmax)(output)
+            model = Model(inputs=[global_branch_model.input, local_branch_model.input], outputs=predictions)
+            model.compile(optimizer=optz, metrics=[metrics.categorical_accuracy], loss=losses.categorical_crossentropy)
+
+    else:
+        print("Regression model.")
+        pred_class = Dense(3, activation=activations.softmax, name="class_output")(output)
+        predictions_values = Dense(1, activation="relu", name="height_output")(output)
+        predictions = OutputLayer()([pred_class, predictions_values])
+
+        model = Model(inputs=[global_branch_model.input, local_branch_model.input], outputs=[pred_class, predictions])
+        model.compile(optimizer=optz, loss=[losses.categorical_crossentropy, losses.mean_squared_error])
+
+    if args['dataset'] != Dataset.flood_heights:
+        model.layers[-1].set_weights([np.concatenate((global_branch_model.layers[-1].get_weights()[0],
+                                                      local_branch_model.layers[-1].get_weights()[0])),
+                                      np.mean(np.array([global_branch_model.layers[-1].get_weights()[1],
+                                                        local_branch_model.layers[-1].get_weights()[1]]), axis=0)])
+    else:
+        model.get_layer("class_output").set_weights([
+            np.concatenate((
+                global_branch_model.layers[-3].get_weights()[0],
+                local_branch_model.layers[-3].get_weights()[0])),
+            np.mean(np.array([
+                global_branch_model.layers[-3].get_weights()[1],
+                local_branch_model.layers[-3].get_weights()[1]]), axis=0)])
+
+        model.get_layer("height_output").set_weights([
+            np.concatenate((
+                global_branch_model.layers[-2].get_weights()[0],
+                local_branch_model.layers[-2].get_weights()[0])),
+            np.mean(np.array([
+                global_branch_model.layers[-2].get_weights()[1],
+                local_branch_model.layers[-2].get_weights()[1]]), axis=0)])
 
     return model
 
@@ -88,29 +131,27 @@ def get_callbacks(filepath):
     ]
 
 
-def train_or_load_model(args, trn_flow, val_flow, filepath, training_classes, training_examples,
-                        validation_examples, branches_models=None, pre_trained_model=None):
+def train_or_load_model(args, trn_flow, val_flow, filepath, training_examples, validation_examples,
+                        branches_models=None, branch=None, pre_trained_model=None):
 
     if args['mode'] == Mode.train:
         if pre_trained_model is not None:
+            optz = Adam(lr=1e-4)
             model = clone_model(pre_trained_model)
             model.set_weights(pre_trained_model.get_weights())
-            model.compile(optimizer=Adam(lr=1e-4), metrics=[metrics.categorical_accuracy],
-                          loss=[categorical_class_balanced_focal_loss(count(training_classes), beta=0.9, gamma=2.)])
+            model.compile(optimizer=optz, metrics=[metrics.categorical_accuracy], loss=losses.categorical_crossentropy)
 
         elif branches_models is not None:
-            model = create_fused_model(len(set(training_classes)), training_classes, branches_models)
+            model = create_fused_model(args, branches_models)
+
         else:
-            model = create_model(trn_flow, number_classes=len(set(training_classes)))
+            model = create_model(args, branch)
 
         model.fit_generator(generator=trn_flow, steps_per_epoch=(training_examples // args['batch_size']),
                             validation_data=val_flow, validation_steps=validation_examples,
                             callbacks=get_callbacks(filepath), epochs=args['epochs'])
     else:
-        # FIXME
-        custom_object = {'categorical_class_balanced_focal_loss_fixed': lambda y_true, y_pred: y_pred,
-                         'categorical_class_balanced_focal_loss': lambda y_true, y_pred: y_pred}
-
+        custom_object = {'OutputLayer': OutputLayer}
         model = load_model(filepath, custom_objects=custom_object)
 
     return model

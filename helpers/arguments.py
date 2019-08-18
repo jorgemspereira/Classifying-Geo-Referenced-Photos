@@ -24,6 +24,7 @@ class Dataset(Enum):
     flood_severity_4_classes = 5
     flood_severity_3_classes = 6
     flood_severity_european_floods = 7
+    flood_heights = 8
 
     def __str__(self):
         return self.name

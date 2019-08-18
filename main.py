@@ -9,7 +9,8 @@ from keras.backend import set_session
 
 from helpers.arguments import Mode, Dataset, Method, Model
 from helpers.training import train_test_dense_net_split, train_test_attention_guided_cnn_cv, train_test_dense_net_cv, \
-    train_test_attention_guided_cnn_split
+    train_test_attention_guided_cnn_split, train_test_dense_net_split_regression, \
+    train_test_attention_guided_cnn_split_regression
 
 RANDOM_SEED = 20
 IMAGE_SZ = 224
@@ -48,7 +49,8 @@ def parse_args():
 def train_test_model(args):
     is_binary = args['dataset'] not in [Dataset.flood_severity_3_classes,
                                         Dataset.flood_severity_4_classes,
-                                        Dataset.flood_severity_european_floods]
+                                        Dataset.flood_severity_european_floods,
+                                        Dataset.flood_heights]
 
     args['random_seed'] = RANDOM_SEED
     args['batch_size'] = BATCH_SIZE
@@ -56,19 +58,27 @@ def train_test_model(args):
     args['image_size'] = IMAGE_SZ
     args['epochs'] = EPOCHS
 
-    if args['method'] == Method.cross_validation:
-        args['nr_folds'] = N_FOLDS
+    if args['dataset'] != Dataset.flood_heights:
+        if args['method'] == Method.cross_validation:
+            args['nr_folds'] = N_FOLDS
 
-        if args['model'] == Model.attention_guided:
-            train_test_attention_guided_cnn_cv(args)
-        elif args['model'] == Model.dense_net:
-            train_test_dense_net_cv(args)
+            if args['model'] == Model.attention_guided:
+                train_test_attention_guided_cnn_cv(args)
+            elif args['model'] == Model.dense_net:
+                train_test_dense_net_cv(args)
 
-    if args['method'] == Method.train_test_split:
-        if args['model'] == Model.attention_guided:
-            train_test_attention_guided_cnn_split(args)
-        elif args['model'] == Model.dense_net:
-            train_test_dense_net_split(args)
+        if args['method'] == Method.train_test_split:
+            if args['model'] == Model.attention_guided:
+                train_test_attention_guided_cnn_split(args)
+            elif args['model'] == Model.dense_net:
+                train_test_dense_net_split(args)
+
+    else:
+        if args['method'] == Method.train_test_split:
+            if args['model'] == Model.dense_net:
+                train_test_dense_net_split_regression(args)
+            elif args['model'] == Model.attention_guided:
+                train_test_attention_guided_cnn_split_regression(args)
 
 
 def main():

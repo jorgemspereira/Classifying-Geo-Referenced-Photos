@@ -10,7 +10,7 @@ from keras_preprocessing.image import ImageDataGenerator
 from tqdm import tqdm
 
 from helpers.find_threshold import find_crop_threshold
-from helpers.arguments import Mode
+from helpers.arguments import Mode, Dataset
 
 
 def check_path(filepath):
@@ -83,8 +83,7 @@ def crop_attention_map(args, img, heat_map, output_path, t):
     thumb.save(output_path_cropped)
 
 
-def visualize_class_activation_map(args, model, predicted_class, is_binary,
-                                   input_paths, output_paths, pb=None, crop=False):
+def visualize_class_activation_map(args, model, predicted_class, input_paths, output_paths, pb=None, crop=False):
     images = []
     for img in input_paths:
         x = image.load_img(img, target_size=(args['image_size'], args['image_size']))
@@ -94,7 +93,10 @@ def visualize_class_activation_map(args, model, predicted_class, is_binary,
         images.append(x)
 
     last_conv_layer = model.get_layer("conv5_block32_2_conv")
-    output = model.output[:, 0] if is_binary else model.output[:, predicted_class]
+    if args['dataset'] != Dataset.flood_heights:
+        output = model.output[:, 0] if args["is_binary"] else model.output[:, predicted_class]
+    else:
+        output = model.output[1][:, 0]
 
     grads = K.gradients(output, last_conv_layer.output)[0]
     pooled_grads = K.mean(grads, axis=(0, 1, 2))
@@ -131,6 +133,7 @@ def visualize_class_activation_map(args, model, predicted_class, is_binary,
             pb.update(1)
 
 
+# TODO (update or remove this method)
 def draw_class_activation_map(args, model, data_frame):
     if not args['class_activation_map']:
         return
@@ -164,7 +167,7 @@ def draw_class_activation_map(args, model, data_frame):
         elements = [x for x in items if x[0] == c]
         inputs = [x[1] for x in elements]
         outputs = [x[2] for x in elements]
-        visualize_class_activation_map(args, model, c, args['is_binary'], inputs, outputs, pb=progress_bar)
+        visualize_class_activation_map(args, model, c, inputs, outputs, pb=progress_bar)
 
     progress_bar.close()
     print("Done.")
@@ -192,7 +195,11 @@ def crop_and_draw_class_activation_map(args, model, data_frame, fold_nr=None):
         inputs.append(input_path)
         outputs.append(output_path)
 
-        result_df = result_df.append({"filename": output_path_cropped, "class": row['class']}, ignore_index=True)
+        if args['dataset'] != Dataset.flood_heights:
+            result_df = result_df.append({"filename": output_path_cropped, "class": row['class']}, ignore_index=True)
+        else:
+            result_df = result_df.append({"filename": output_path_cropped,
+                                          "class": row['class'], "height": row['height']}, ignore_index=True)
 
     if args['mode'] == Mode.train:
         print("Predicting images to generate class activation maps...")
@@ -200,24 +207,36 @@ def crop_and_draw_class_activation_map(args, model, data_frame, fold_nr=None):
         flow = generator.flow_from_dataframe(dataframe=data_frame, directory=None,
                                              target_size=(args['image_size'], args['image_size']),
                                              shuffle=False, batch_size=1)
-        predictions = model.predict_generator(flow, verbose=1, steps=flow.n)
-        if args['is_binary']:
-            y_pred = np.where(predictions > 0.5, 1, 0)
+
+        if args['dataset'] != Dataset.flood_heights:
+            predictions = model.predict_generator(flow, verbose=1, steps=flow.n)
         else:
-            y_pred = np.argmax(predictions, axis=1)
+            predictions = model.predict_generator(flow, verbose=1, steps=flow.n)[1]
+
+        if args['dataset'] != Dataset.flood_heights:
+            if args['is_binary']:
+                y_pred = np.where(predictions > 0.5, 1, 0)
+            else:
+                y_pred = np.argmax(predictions, axis=1)
+        else:
+            y_pred = predictions
+
         print("Done.")
 
         print("Drawing class activation maps...")
         progress_bar = tqdm(total=len(inputs))
 
         items = list(zip(y_pred, inputs, outputs))
-        number_of_classes = 2 if args['is_binary'] else 3
-        for c in range(number_of_classes):
-            elements = [x for x in items if x[0] == c]
-            inputs = [x[1] for x in elements]
-            outputs = [x[2] for x in elements]
-            visualize_class_activation_map(args, model, c, args['is_binary'], inputs,
-                                           outputs, pb=progress_bar, crop=True)
+
+        if args['dataset'] != Dataset.flood_heights:
+            number_of_classes = 2 if args['is_binary'] else 3
+            for c in range(number_of_classes):
+                elements = [x for x in items if x[0] == c]
+                inputs = [x[1] for x in elements]
+                outputs = [x[2] for x in elements]
+                visualize_class_activation_map(args, model, c, inputs, outputs, pb=progress_bar, crop=True)
+        else:
+            visualize_class_activation_map(args, model, None, inputs, outputs, pb=progress_bar, crop=True)
 
         progress_bar.close()
         print("Done.")

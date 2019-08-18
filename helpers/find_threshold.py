@@ -7,6 +7,8 @@ from keras import backend as K
 from keras_preprocessing import image
 from keras_preprocessing.image import ImageDataGenerator
 
+from helpers.arguments import Dataset
+
 
 def intersection_over_union(box_complete, boxes):
     boxes_areas, intersect_areas = [], []
@@ -42,7 +44,11 @@ def calculate_heat_map_aux(args, model, predicted_class, input_paths, output_pat
         images.append(x)
 
     last_conv_layer = model.get_layer("conv5_block32_2_conv")
-    output = model.output[:, 0] if args['is_binary'] else model.output[:, predicted_class]
+
+    if args['dataset'] != Dataset.flood_heights:
+        output = model.output[:, 0] if args["is_binary"] else model.output[:, predicted_class]
+    else:
+        output = model.output[1][:, 0]
 
     grads = K.gradients(output, last_conv_layer.output)[0]
     pooled_grads = K.mean(grads, axis=(0, 1, 2))
@@ -83,26 +89,36 @@ def calculate_heat_map(args, model, data_frame):
     flow = generator.flow_from_dataframe(dataframe=data_frame, directory=None,
                                          target_size=(args['image_size'], args['image_size']),
                                          shuffle=False, batch_size=1)
-    predictions = model.predict_generator(flow, verbose=1, steps=flow.n)
-    if args['is_binary']:
-        y_pred = np.where(predictions > 0.5, 1, 0)
+
+    if args['dataset'] != Dataset.flood_heights:
+        predictions = model.predict_generator(flow, verbose=1, steps=flow.n)
     else:
-        y_pred = np.argmax(predictions, axis=1)
+        predictions = model.predict_generator(flow, verbose=1, steps=flow.n)[1]
+
+    if args['dataset'] != Dataset.flood_heights:
+        if args['is_binary']:
+            y_pred = np.where(predictions > 0.5, 1, 0)
+        else:
+            y_pred = np.argmax(predictions, axis=1)
+    else:
+        y_pred = predictions
 
     for index, row in data_frame.iterrows():
         input_path, photo = row[0], row[0].split("/")[-1].replace("jpg", "bmp")
         outputs.append("./maps/{}".format(photo))
-
         inputs.append(input_path)
 
     items = list(zip(y_pred, inputs, outputs))
     number_of_classes = 2 if args['is_binary'] else 3
 
-    for c in range(number_of_classes):
-        elements = [x for x in items if x[0] == c]
-        inputs = [x[1] for x in elements]
-        outputs = [x[2] for x in elements]
-        result.update(calculate_heat_map_aux(args, model, c, inputs, outputs))
+    if args['dataset'] != Dataset.flood_heights:
+        for c in range(number_of_classes):
+            elements = [x for x in items if x[0] == c]
+            inputs = [x[1] for x in elements]
+            outputs = [x[2] for x in elements]
+            result.update(calculate_heat_map_aux(args, model, c, inputs, outputs))
+    else:
+        result.update(calculate_heat_map_aux(args, model, None, inputs, outputs))
 
     return result
 
