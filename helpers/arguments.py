@@ -55,6 +55,7 @@ class Method(Enum):
 class Model(Enum):
     dense_net = 1
     attention_guided = 2
+    efficient_net = 3
 
     def __str__(self):
         return self.name

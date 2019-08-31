@@ -13,7 +13,6 @@ from helpers.training import train_test_dense_net_split, train_test_attention_gu
     train_test_attention_guided_cnn_split_regression
 
 RANDOM_SEED = 20
-IMAGE_SZ = 224
 BATCH_SIZE = 16
 N_FOLDS = 10
 EPOCHS = 50
@@ -52,10 +51,10 @@ def train_test_model(args):
                                         Dataset.flood_severity_european_floods,
                                         Dataset.flood_heights]
 
+    args['image_size'] = 224 if args['model'] != Model.efficient_net else 300
     args['random_seed'] = RANDOM_SEED
     args['batch_size'] = BATCH_SIZE
     args['is_binary'] = is_binary
-    args['image_size'] = IMAGE_SZ
     args['epochs'] = EPOCHS
 
     if args['dataset'] != Dataset.flood_heights:
@@ -64,13 +63,13 @@ def train_test_model(args):
 
             if args['model'] == Model.attention_guided:
                 train_test_attention_guided_cnn_cv(args)
-            elif args['model'] == Model.dense_net:
+            elif args['model'] == Model.dense_net or args['model'] == Model.efficient_net:
                 train_test_dense_net_cv(args)
 
         if args['method'] == Method.train_test_split:
             if args['model'] == Model.attention_guided:
                 train_test_attention_guided_cnn_split(args)
-            elif args['model'] == Model.dense_net:
+            elif args['model'] == Model.dense_net or args['model'] == Model.efficient_net:
                 train_test_dense_net_split(args)
 
     else:

@@ -18,7 +18,12 @@ class OutputLayer(Layer):
         self.__name__ = 'outputLayer'
 
     def call(self, inputs, **kwargs):
-        return K.switch(K.less(softargmax(inputs[0]), 1.0), K.zeros_like(inputs[1]), inputs[1])
+        result = softargmax(inputs[0])
+        return K.switch(K.less(result, 1.0),
+                        K.zeros_like(inputs[1]),
+                        K.switch(K.less(result, 2.0),
+                                 inputs[1],
+                                 inputs[2]))
 
     def get_config(self): return super(OutputLayer, self).get_config()
 
