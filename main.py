@@ -74,10 +74,10 @@ def train_test_model(args):
 
     else:
         if args['method'] == Method.train_test_split:
-            if args['model'] == Model.dense_net:
-                train_test_dense_net_split_regression(args)
-            elif args['model'] == Model.attention_guided:
+            if args['model'] == Model.attention_guided:
                 train_test_attention_guided_cnn_split_regression(args)
+            elif args['model'] == Model.dense_net or args['model'] == Model.efficient_net:
+                train_test_dense_net_split_regression(args)
 
 
 def main():

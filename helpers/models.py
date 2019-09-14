@@ -168,7 +168,9 @@ def train_or_load_model(args, trn_flow, val_flow, filepath, training_examples, v
                             validation_data=val_flow, validation_steps=validation_examples,
                             callbacks=get_callbacks(filepath), epochs=args['epochs'])
     else:
-        custom_object = {'OutputLayer': OutputLayer}
+        custom_object = {'OutputLayer': OutputLayer,
+                         'custom_activation_more_1m': custom_activation_more_1m,
+                         'custom_activation_less_1m': custom_activation_less_1m}
         model = load_model(filepath, custom_objects=custom_object)
 
     return model

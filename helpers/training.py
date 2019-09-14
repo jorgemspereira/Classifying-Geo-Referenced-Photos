@@ -264,7 +264,7 @@ def train_test_dense_net_split_regression(args):
     val_flow = merge_output_generators(val_flow_1, val_flow_2)
     tst_flow = merge_output_generators(tst_flow_1, tst_flow_2)
 
-    model = train_or_load_model(args, trn_flow, val_flow, filepath, trn_flow_1.n, val_flow_1.n)
+    model = train_or_load_model(args, trn_flow, val_flow, filepath, trn_flow_1.n, val_flow_1.n, branch="global")
     y_pred_prob = model.predict_generator(generator=tst_flow, verbose=1, steps=tst_flow_1.n)[1]
     y_pred_prob, y_pred, y_test = calculate_prediction(args, y_pred_prob, trn_flow, test_data_frame_2)
 
