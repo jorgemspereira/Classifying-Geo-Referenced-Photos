@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from keras import backend as K
 from keras_preprocessing.image import ImageDataGenerator
+from scipy.stats import pearsonr
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score, confusion_matrix, \
     average_precision_score, mean_absolute_error, mean_squared_error
 from sklearn.model_selection import StratifiedKFold, train_test_split
@@ -162,7 +163,8 @@ def accuracy_precision_recall_fscore(args, y_test, y_pred):
                            'f-score_ma': f_score_ma, 'mean_absolute_error': mean_absolute})
     else:
         mse = mean_squared_error(y_test, y_pred)
-        result = {'mse': mse,
+        rho = pearsonr([float(i) for i in y_test], [el[0] for el in y_pred])[0]
+        result = {'mse': mse, 'rho': rho,
                   'accuracy_001': calculate_accuracy_with_threshold(y_test, y_pred, threshold=0.10),
                   'accuracy_025': calculate_accuracy_with_threshold(y_test, y_pred, threshold=0.25),
                   'accuracy_050': calculate_accuracy_with_threshold(y_test, y_pred, threshold=0.50),
@@ -188,6 +190,7 @@ def print_results(args, metrics):
 
     else:
         print("Mean Squared Error ------> {}".format(metrics['mse']))
+        print("Pearson Coefficient -----> {}".format(metrics['rho']))
         print("Accuracy 0.10 threshold -> {}".format(metrics['accuracy_001']))
         print("Accuracy 0.25 threshold -> {}".format(metrics['accuracy_025']))
         print("Accuracy 0.50 threshold -> {}".format(metrics['accuracy_050']))
