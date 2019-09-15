@@ -1,6 +1,9 @@
 # Classifying Geo-Referenced Photos and Satellite Images for Supporting Terrain Classification  
 
-The source code presented in this repository leverages the [keras.io](http://keras.io/) deep learning library (combined with [scikit-learn](https://scikit-learn.org/stable/), and other machine learning libraries) to test the usability of the DenseNet neural architecture (Huang et al. 2017) to classify images regarding the presence of a flood, and the severity of that same flood.
+The source code presented in this repository leverages the [keras.io](http://keras.io/) deep learning library 
+(combined with [scikit-learn](https://scikit-learn.org/stable/), and other machine learning libraries) to test
+the usability of the DenseNet neural architecture (Huang et al. 2017), and also the EfficientNet model (Tan et al. 2019), 
+to classify images regarding the presence of a flood, and the severity of that same flood.
 
     @inproceedings{huang2017densenet, 
         author    = {G. Huang and Z. Liu and L. v. d. Maaten and K. Q. Weinberger}, 
@@ -8,9 +11,13 @@ The source code presented in this repository leverages the [keras.io](http://ker
         title     = {Densely Connected Convolutional Networks}, 
         year      = {2017}
     }
-
-
-(More details later...)
+    
+    @article{tan2019efficientnet,
+        title     = {{EfficientNet}: Rethinking Model Scaling for Convolutional Neural Networks},
+        author    = {Mingxing Tan and Quoc V. Le},
+        year      = {2019},
+        journal   = {arXiv preprint 1905.11946}
+    }
 
 ### Files needed not in this repository
 
@@ -37,6 +44,9 @@ project
 │   │   │    dataset_train_mediaeval2017.csv
 │   │   │    dataset_train_mediaeval2018.csv
 │   │
+│   └─── FloodHeight 
+│   │   │    flood_height.csv
+│   │ 
 │   └─── MediaEval2017
 │   │   └─── Classification 
 │   │       └─── development_set
@@ -84,12 +94,15 @@ https://github.com/jorgemspereira/MediaEval2018-Image-Downloader
 The Flood Severity labels can be found here:  
 https://github.com/jorgemspereira/Flood-Image-Tagger/tree/master/results  
 
+The Flood Heights labels obtained through an heuristic procedure (as well as the implementation for the procedure) can be obtained here:
+https://github.com/jorgemspereira/Flood-Severity-Estimation
+
 ### How to use  
 
 The code was developed and tested in Python 3.6.7 with Keras 2.2.4, using Tensorflow as backend. The code supports re-training in cross-validation, and train-test split (being that the test split will be the test split from the MediaEval 2017 DIRSM task). Also, it is possible to re-evaluate a previous saved model. To run the script simply execute:
 
 ```console
-$ python3 main.py --mode {train, load} --model {dense_net, attention_guided} --dataset {mediaeval2017, mediaeval2018, european_floods, all, flood_severity_3_classes, flood_severity_european_floods} --method {cross_validation, train_test_split} --data-augmentation --class-activation-map --print-classifications
+$ python3 main.py --mode {train, load} --model {dense_net, attention_guided, efficent_net} --dataset {mediaeval2017, mediaeval2018, european_floods, all, flood_severity_3_classes, flood_severity_european_floods, flood_heigths} --method {cross_validation, train_test_split} --data-augmentation --class-activation-map --print-classifications
 ```
 
 Where the flag _data-augmentation_ will use data-augmentation to train the models; the flag _class-activation-map_ will draw the class activation maps for each test example; and _print-classifications_ will print the classification for each test example and save them in a file on the root directory.
@@ -98,5 +111,4 @@ Where the flag _data-augmentation_ will use data-augmentation to train the model
 ### Acknowledgments
 
 - [Cyclical Learning Rate](https://github.com/bckenstler/CLR)
-- [Focal Loss](https://github.com/umbertogriffo/focal-loss-keras)
-- [Mixup Generator](https://github.com/Tony607/keras_mixup_generator)
+- [EfficientNet](https://github.com/qubvel/efficientnet)
