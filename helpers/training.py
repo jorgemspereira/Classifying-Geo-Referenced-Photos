@@ -147,7 +147,7 @@ def calculate_accuracy_with_threshold(y_test, y_pred, threshold=0.1):
     return correct / (correct + incorrect)
 
 
-def accuracy_precision_recall_fscore(args, y_test, y_pred):
+def accuracy_precision_recall_fscore(args, y_test, y_pred, y_test2=None):
     if args['dataset'] != Dataset.flood_heights:
         accuracy = accuracy_score(y_test.astype(int), y_pred)
         result = {'accuracy': accuracy}
@@ -162,9 +162,15 @@ def accuracy_precision_recall_fscore(args, y_test, y_pred):
             result.update({'precision_ma': precision_ma, 'recall_ma': recall_ma,
                            'f-score_ma': f_score_ma, 'mean_absolute_error': mean_absolute})
     else:
-        mse = mean_squared_error(y_test, y_pred)
+        mse_total = mean_squared_error(y_test, y_pred)
+
+        mse_less_1 = mean_squared_error(np.array([float(el[0]) for el in zip(y_test, y_test2) if int(el[1]) == 1]),
+                                        np.array([float(el[0][0]) for el in zip(y_pred, y_test2) if int(el[1]) == 1]))
+        mse_more_1 = mean_squared_error(np.array([float(el[0]) for el in zip(y_test, y_test2) if int(el[1]) == 2]),
+                                        np.array([float(el[0][0]) for el in zip(y_pred, y_test2) if int(el[1]) == 2]))
+
         rho = pearsonr([float(i) for i in y_test], [el[0] for el in y_pred])[0]
-        result = {'mse': mse, 'rho': rho,
+        result = {'mse_total': mse_total, 'mse_more_1': mse_more_1, 'mse_less_1': mse_less_1, 'rho': rho,
                   'accuracy_001': calculate_accuracy_with_threshold(y_test, y_pred, threshold=0.10),
                   'accuracy_025': calculate_accuracy_with_threshold(y_test, y_pred, threshold=0.25),
                   'accuracy_050': calculate_accuracy_with_threshold(y_test, y_pred, threshold=0.50),
@@ -189,12 +195,14 @@ def print_results(args, metrics):
             print("Recall (macro) ----------> {}".format(metrics['recall_ma']))
 
     else:
-        print("Mean Squared Error ------> {}".format(metrics['mse']))
-        print("Pearson Coefficient -----> {}".format(metrics['rho']))
-        print("Accuracy 0.10 threshold -> {}".format(metrics['accuracy_001']))
-        print("Accuracy 0.25 threshold -> {}".format(metrics['accuracy_025']))
-        print("Accuracy 0.50 threshold -> {}".format(metrics['accuracy_050']))
-        print("Accuracy 1.00 threshold -> {}".format(metrics['accuracy_100']))
+        print("Mean Squared Error Total --> {}".format(metrics['mse_total']))
+        print("Mean Squared Error < 1 m --> {}".format(metrics['mse_less_1']))
+        print("Mean Squared Error > 1 m --> {}".format(metrics['mse_more_1']))
+        print("Pearson Coefficient -------> {}".format(metrics['rho']))
+        print("Accuracy 0.10 threshold ---> {}".format(metrics['accuracy_001']))
+        print("Accuracy 0.25 threshold ---> {}".format(metrics['accuracy_025']))
+        print("Accuracy 0.50 threshold ---> {}".format(metrics['accuracy_050']))
+        print("Accuracy 1.00 threshold ---> {}".format(metrics['accuracy_100']))
 
 
 def print_fold_results(args, metrics):
@@ -271,7 +279,7 @@ def train_test_dense_net_split_regression(args):
     y_pred_prob = model.predict_generator(generator=tst_flow, verbose=1, steps=tst_flow_1.n)[1]
     y_pred_prob, y_pred, y_test = calculate_prediction(args, y_pred_prob, trn_flow, test_data_frame_2)
 
-    metrics_dict = accuracy_precision_recall_fscore(args, y_test, y_pred)
+    metrics_dict = accuracy_precision_recall_fscore(args, y_test, y_pred, y_test2=test_data_frame_1['class'].values)
     print_classifications(args, tst_flow_1.filenames, test_data_frame_2, y_pred)
     print_results(args, metrics_dict)
 
@@ -310,7 +318,7 @@ def train_test_attention_guided_cnn_split_regression(args):
                                        trn_flow_1_global.n, val_flow_1_global.n, branch="global")
     y_pred_prob = model_global.predict_generator(generator=tst_flow_global, verbose=1, steps=tst_flow_1_global.n)[1]
     y_pred_prob, y_pred, y_test = calculate_prediction(args, y_pred_prob, trn_flow_global, tst_df_2_global)
-    metrics_dict = accuracy_precision_recall_fscore(args, y_test, y_pred)
+    metrics_dict = accuracy_precision_recall_fscore(args, y_test, y_pred, y_test2=tst_df_1_global['class'].values)
 
     print("Global branch results.")
     print_results(args, metrics_dict)
@@ -344,7 +352,7 @@ def train_test_attention_guided_cnn_split_regression(args):
                                       trn_flow_2_local.n, val_flow_2_local.n, branch="local")
     y_pred_prob = model_local.predict_generator(generator=tst_flow_local, verbose=1, steps=tst_flow_2_local.n)[1]
     y_pred_prob, y_pred, y_test = calculate_prediction(args, y_pred_prob, trn_flow_2_local, tst_local_df_2)
-    metrics_dict = accuracy_precision_recall_fscore(args, y_test, y_pred)
+    metrics_dict = accuracy_precision_recall_fscore(args, y_test, y_pred, y_test2=tst_local_df_1['class'].values)
 
     print("Local branch results.")
     print_results(args, metrics_dict)
@@ -360,7 +368,7 @@ def train_test_attention_guided_cnn_split_regression(args):
 
     y_pred_prob = model.predict_generator(generator=tst_flow_merged, verbose=1, steps=tst_flow_1_local.n)[1]
     y_pred_prob, y_pred, y_test = calculate_prediction(args, y_pred_prob, trn_flow_1_global, tst_df_2_global)
-    metrics_dict = accuracy_precision_recall_fscore(args, y_test, y_pred)
+    metrics_dict = accuracy_precision_recall_fscore(args, y_test, y_pred, y_test2=tst_df_1_global['class'].values)
 
     print("Fused model results.")
     print_results(args, metrics_dict)
@@ -441,6 +449,7 @@ def train_test_attention_guided_cnn_cv(args):
     metrics_dict, y_pred_prob_classes, fl_nr = defaultdict(int), [], 1
 
     k_fold = StratifiedKFold(n_splits=args['nr_folds'], shuffle=True, random_state=args['random_seed'])
+    # y_test_final, y_prob_final, y_pred_final = [], [], []
 
     for train, test in k_fold.split(x, y):
         train_data_frame = pd.DataFrame(data={'filename': x[train], 'class': y[train]})
@@ -503,6 +512,10 @@ def train_test_attention_guided_cnn_cv(args):
 
         draw_class_activation_map(args, model, test_data_frame)
 
+        # y_pred_final += y_pred
+        # y_test_final += y_test.astype(int).tolist()
+        # y_prob_final.extend([x.tolist() for x in y_pred_prob])
+
         metrics_dict = dict((k, metrics_dict[k] + v) for k, v in metrics_it.items())
         metrics_dict_glob = dict((k, metrics_dict_glob[k] + v) for k, v in metrics_it_glob.items())
         K.clear_session()
@@ -512,6 +525,33 @@ def train_test_attention_guided_cnn_cv(args):
     metrics_dict_glob = dict((k, v / args['nr_folds']) for k, v in metrics_dict_glob.items())
     print_results(args, metrics_dict_glob)
     calculate_average_precision_ks(args, y_pred_prob_classes_glob)
+
+    # precision, recall, average_precision = dict(), dict(), dict()
+    # y_test_bin_final = label_binarize(y_test_final, classes=[0, 1, 2])
+    # y_prob_final = np.array(y_prob_final)
+    # for i in range(3):
+    #     precision[i], recall[i], _ = precision_recall_curve(y_test_bin_final[:, i],
+    #                                                         y_prob_final[:, i])
+    #     average_precision[i] = average_precision_score(y_test_bin_final[:, i], y_prob_final[:, i])
+    #
+    # colors = cycle(['navy', 'turquoise', 'darkorange'])
+    # tags = ["no flood", "water < 1m", "water > 1m"]
+    # lines = []
+    # labels = []
+    # for i, color in zip(range(3), colors):
+    #     l, = plt.plot(recall[i], precision[i], color=color, lw=2)
+    #     lines.append(l)
+    #     labels.append('Precision-recall for {0} (area = {1:0.2f})'
+    #                   ''.format(tags[i], average_precision[i]))
+    #
+    # plt.xlim([0.0, 1.0])
+    # plt.ylim([0.0, 1.05])
+    # plt.xlabel('Recall')
+    # plt.ylabel('Precision')
+    # plt.legend(lines, labels)
+    # plt.savefig('prec_rec.png')
+    #
+    # print(confusion_matrix(y_test_final, y_pred_final))
 
     print("Fused model results.")
     metrics_dict = dict((k, v / args['nr_folds']) for k, v in metrics_dict.items())

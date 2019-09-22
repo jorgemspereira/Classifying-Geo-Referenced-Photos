@@ -43,16 +43,16 @@ def custom_activation_less_1m(x):
 
 
 def create_model(args, branch):
-    if args['model'] == arguments.Model.dense_net or args['model'] == arguments.Model.attention_guided:
-        base_model = DenseNet201(include_top=False, weights='imagenet')
-    else:
-        base_model = EfficientNetB3(include_top=False, weights='imagenet')
     optz = Adam(lr=1e-5)
 
-    x = base_model.output
-    x = GlobalAveragePooling2D(name="global_average_pooling2d_layer")(x)
-
     if args['dataset'] != Dataset.flood_heights:
+        if args['model'] == arguments.Model.dense_net or args['model'] == arguments.Model.attention_guided:
+            base_model = DenseNet201(include_top=False, weights='imagenet')
+        else:
+            base_model = EfficientNetB3(include_top=False, weights='imagenet')
+
+        x = base_model.output
+        x = GlobalAveragePooling2D(name="global_average_pooling2d_layer")(x)
 
         if args['is_binary']:
             print("Binary model.")
@@ -67,11 +67,15 @@ def create_model(args, branch):
             model.compile(optimizer=optz, metrics=[metrics.categorical_accuracy], loss=losses.categorical_crossentropy)
 
     else:
-        print("Regression model.")
-        base_model = load_model("/home/jpereira/Tests/weights/" +
-                                "flood_severity_3_classes_attention_guided_{}_branch_cv/".format(branch) +
-                                "weights_fold_1_from_10.hdf5")
+        if args['model'] == arguments.Model.dense_net or args['model'] == arguments.Model.attention_guided:
+            base_model = load_model("/home/jpereira/Tests/weights/" +
+                                    "flood_severity_3_classes_attention_guided_{}_branch_cv/".format(branch) +
+                                    "weights_fold_1_from_10.hdf5")
+        else:
+            base_model = load_model("/home/jpereira/Tests/weights/" +
+                                    "flood_severity_3_classes_cv/weights_fold_1_from_10.hdf5")
 
+        print("Regression model.")
         output_less_1_m = Dense(1, activation=custom_activation_less_1m, name="less_1m")(base_model.layers[-2].output)
         output_more_1_m = Dense(1, activation=custom_activation_more_1m, name="more_1m")(base_model.layers[-2].output)
         predictions = OutputLayer()([base_model.layers[-1].output, output_less_1_m, output_more_1_m])

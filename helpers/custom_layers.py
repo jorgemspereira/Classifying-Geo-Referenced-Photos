@@ -19,9 +19,9 @@ class OutputLayer(Layer):
 
     def call(self, inputs, **kwargs):
         result = softargmax(inputs[0])
-        return K.switch(K.less(result, 1.0),
+        return K.switch(K.less(result, 0.5),
                         K.zeros_like(inputs[1]),
-                        K.switch(K.less(result, 2.0),
+                        K.switch(K.less(result, 1.5),
                                  inputs[1],
                                  inputs[2]))
 
